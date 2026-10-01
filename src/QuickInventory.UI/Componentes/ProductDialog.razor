@@ -10,11 +10,17 @@
                               AutoFocus="true"
                               Variant="Variant.Outlined" />
 
-                <MudTextField T="string"
-                              @bind-Value="Product.Category"
-                              Label="Categoría"
-                              Placeholder="Ej.: Entradas, Tienda, Bebidas"
-                              Variant="Variant.Outlined" />
+                <MudSelect T="ProductCategory"
+                           Value="Product.Category"
+                           ValueChanged="CategoryChanged"
+                           Label="Categoría"
+                           ToStringFunc="c => c?.Name"
+                           Variant="Variant.Outlined">
+                    @foreach (var category in ProductCategory.All)
+                    {
+                        <MudSelectItem Value="category">@category.Name</MudSelectItem>
+                    }
+                </MudSelect>
 
                 <MudTextField T="string"
                               @bind-Value="Product.BarCode"
@@ -83,6 +89,14 @@
     private MudForm form = default!;
 
     private bool IsNew => Product.Id == 0;
+
+    // Las entradas no llevan stock: al elegir la categoría de un producto nuevo
+    // se propone el control de unidades que le corresponde (se puede cambiar).
+    private void CategoryChanged(ProductCategory category)
+    {
+        Product.Category = category;
+        if (IsNew) Product.StockControl = category != ProductCategory.Ticket;
+    }
 
     private async Task Guardar()
     {

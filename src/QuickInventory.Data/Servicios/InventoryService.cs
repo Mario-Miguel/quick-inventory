@@ -17,6 +17,14 @@ public sealed class InventoryService(IDbContextFactory<BaseDbContext> factory) :
             .ToListAsync();
     }
 
+    public async Task<List<Product>> GetProductsAsync(SalesPoint salesPoint)
+    {
+        // El perfil de cada categoría se decide en código, no en la base de datos,
+        // así que se filtra en memoria. Son pocos productos.
+        var products = await GetProductsAsync();
+        return [.. products.Where(p => p.Category.SalesPoint == salesPoint)];
+    }
+
     public async Task SaveProductAsync(Product product)
     {
         Normalize(product);
@@ -115,7 +123,6 @@ public sealed class InventoryService(IDbContextFactory<BaseDbContext> factory) :
     private static void Normalize(Product p)
     {
         p.Name = p.Name?.Trim() ?? "";
-        p.Category = p.Category?.Trim() ?? "";
         p.BarCode = string.IsNullOrWhiteSpace(p.BarCode) ? null : p.BarCode.Trim();
     }
 

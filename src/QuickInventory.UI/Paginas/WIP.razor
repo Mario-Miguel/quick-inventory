@@ -16,9 +16,9 @@
 @code {
     private string Titulo => Navigation.ToBaseRelativePath(Navigation.Uri).Trim('/') switch
     {
-        "sales" => "Sales",
-        "Incomes" => "Ingresos",
-        "Payments" => "Pagos",
+        "sales" => "Ventas",
+        "incomes" => "Ingresos",
+        "payments" => "Pagos",
         _ => ""
     };
 }

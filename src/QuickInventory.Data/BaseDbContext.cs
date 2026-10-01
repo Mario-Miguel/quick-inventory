@@ -23,6 +23,8 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
         configuration.Properties<PaymentMethod>().HaveConversion<string>();
         configuration.Properties<StockMovementType>().HaveConversion<string>();
         configuration.Properties<CashMovementType>().HaveConversion<string>();
+        configuration.Properties<SalesPoint>().HaveConversion<string>();
+        configuration.Properties<ProductCategory>().HaveConversion<ProductCategoryConverter>();
     }
 
     protected override void OnModelCreating(ModelBuilder model)
@@ -64,3 +66,7 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
 internal sealed class AmountInCentsConverter() : ValueConverter<decimal, long>(
     importe => (long)Math.Round(importe * 100m, MidpointRounding.AwayFromZero),
     centimos => centimos / 100m);
+
+internal sealed class ProductCategoryConverter() : ValueConverter<ProductCategory, string>(
+    categoria => categoria.Value,
+    valor => ProductCategory.FromValue(valor));

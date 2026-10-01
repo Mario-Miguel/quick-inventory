@@ -1,9 +1,11 @@
 @page "/"
+@inject ActiveProfile Profile
+@implements IDisposable
 
 <h1 class="page-title">¿Qué quieres hacer?</h1>
 
 <MudGrid Spacing="4">
-    @foreach (var module in modules)
+    @foreach (var module in Modules.For(Profile.Current))
     {
         <MudItem xs="12" md="6">
             <MudButton Href="@module.Route"
@@ -24,13 +26,10 @@
 </MudGrid>
 
 @code {
-    private sealed record Module(string Title, string Description, string Icon, string Route);
+    // Al cambiar de perfil cambian las opciones que se muestran.
+    protected override void OnInitialized() => Profile.Changed += OnProfileChanged;
 
-    private readonly Module[] modules =
-    [
-        new("Sales", "Cobrar entradas y artículos de la tienda", Icons.Material.Filled.PointOfSale, "/ventas"),
-        new("Inventario", "Productos, precios y unidades en almacén", Icons.Material.Filled.Inventory2, "/inventory"),
-        new("Ingresos", "Subvenciones, visitas concertadas y otros cobros", Icons.Material.Filled.TrendingUp, "/ingresos"),
-        new("Pagos", "Proveedores, facturas y otros gastos", Icons.Material.Filled.Payments, "/pagos"),
-    ];
+    private void OnProfileChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Profile.Changed -= OnProfileChanged;
 }

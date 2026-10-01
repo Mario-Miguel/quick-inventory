@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject NavigationManager Navigation
+@inject ActiveProfile Profile
 
 <MudThemeProvider Theme="Theme.Museo" />
 <MudPopoverProvider />
@@ -19,6 +20,29 @@
         }
         <MudText Typo="Typo.h6" Class="ml-2">Museo de la Sidra</MudText>
         <MudSpacer />
+        @* Cambio de perfil: sin contraseña, basta con elegir el otro. *@
+        <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="mr-4">
+            <ActivatorContent>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Inherit"
+                           Size="Size.Large"
+                           StartIcon="@ActiveProfile.Icon(Profile.Current)"
+                           EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                           OnClick="context.ToggleAsync">
+                    @ActiveProfile.Name(Profile.Current)
+                </MudButton>
+            </ActivatorContent>
+            <ChildContent>
+                @foreach (var salesPoint in Enum.GetValues<SalesPoint>())
+                {
+                    <MudMenuItem Icon="@ActiveProfile.Icon(salesPoint)"
+                                 Disabled="@(salesPoint == Profile.Current)"
+                                 OnClick="() => Profile.Change(salesPoint)">
+                        Cambiar a @ActiveProfile.Name(salesPoint)
+                    </MudMenuItem>
+                }
+            </ChildContent>
+        </MudMenu>
         <MudText Typo="Typo.body1" Class="header-date">@DateTime.Today.ToString("dddd, d 'de' MMMM 'de' yyyy")</MudText>
     </MudAppBar>
 
@@ -32,9 +56,25 @@
 @code {
     private bool InHomepage => Navigation.ToBaseRelativePath(Navigation.Uri).Trim('/').Length == 0;
 
-    protected override void OnInitialized() => Navigation.LocationChanged += OnNavigation;
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnNavigation;
+        Profile.Changed += OnProfileChanged;
+    }
 
     private void OnNavigation(object? sender, LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
 
-    public void Dispose() => Navigation.LocationChanged -= OnNavigation;
+    // Si el nuevo perfil no puede estar en la pantalla actual, se vuelve al inicio.
+    private void OnProfileChanged() => InvokeAsync(() =>
+    {
+        if (!Modules.Allows(Profile.Current, Navigation.ToBaseRelativePath(Navigation.Uri)))
+            Navigation.NavigateTo("/");
+        StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnNavigation;
+        Profile.Changed -= OnProfileChanged;
+    }
 }

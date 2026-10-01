@@ -4,8 +4,14 @@ namespace QuickInventory.Core.Services;
 
 public interface IInventoryService
 {
-    /// <summary>Products activos, ordenados por nombre.</summary>
+    /// <summary>Todos los productos activos, ordenados por nombre.</summary>
     Task<List<Product>> GetProductsAsync();
+
+    /// <summary>
+    /// Productos activos que puede vender el perfil indicado (según su categoría),
+    /// ordenados por nombre.
+    /// </summary>
+    Task<List<Product>> GetProductsAsync(SalesPoint salesPoint);
 
     /// <summary>
     /// Crea el product si Id == 0 o actualiza sus datos si ya existe.

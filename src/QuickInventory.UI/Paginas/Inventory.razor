@@ -11,7 +11,7 @@
                Size="Size.Large"
                StartIcon="@Icons.Material.Filled.Add"
                OnClick="NewProduct">
-        Nuevo product
+        Nuevo producto
     </MudButton>
 </div>
 
@@ -51,7 +51,7 @@ else
                 <MudTableSortLabel T="Product" SortBy="p => p.Name" InitialDirection="SortDirection.Ascending">Producto</MudTableSortLabel>
             </MudTh>
             <MudTh>
-                <MudTableSortLabel T="Product" SortBy="p => p.Category">Categoría</MudTableSortLabel>
+                <MudTableSortLabel T="Product" SortBy="p => p.Category.Name">Categoría</MudTableSortLabel>
             </MudTh>
             <MudTh Style="text-align:right">
                 <MudTableSortLabel T="Product" SortBy="p => p.SalePrice">Precio</MudTableSortLabel>
@@ -70,7 +70,7 @@ else
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.BarCode</MudText>
                 }
             </MudTd>
-            <MudTd DataLabel="Categoría">@context.Category</MudTd>
+            <MudTd DataLabel="Categoría">@context.Category.Name</MudTd>
             <MudTd DataLabel="Precio" Style="text-align:right">@context.SalePrice.ToString("C")</MudTd>
             <MudTd DataLabel="Stock" Style="text-align:right">
                 @if (!context.StockControl)
@@ -148,7 +148,7 @@ else
 
         var texto = searching.Trim();
         return Contains(p.Name, texto)
-            || Contains(p.Category, texto)
+            || Contains(p.Category.Name, texto)
             || Contains(p.BarCode, texto);
     }
 

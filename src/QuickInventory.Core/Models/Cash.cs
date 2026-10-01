@@ -15,6 +15,8 @@ public class Sale
 {
     public int Id { get; set; }
     public DateTime Date { get; set; }
+    /// <summary>Perfil que hizo la venta, para separar lo de Taquilla y lo de Tienda.</summary>
+    public SalesPoint SalesPoint { get; set; }
     public PaymentMethod PaymentMethod { get; set; }
     public decimal Total { get; set; }
     public bool Canceled { get; set; }

@@ -66,3 +66,4 @@ obj/
 *.db-shm
 *.db-wal
 publish/
+.vscode/

@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
 using QuickInventory.Data;
+using QuickInventory.UI;
 
 namespace QuickInventory.Desktop;
 
@@ -58,6 +59,9 @@ public partial class App : Application
 
         services.AddMudServices();
         services.AddData(DatabasePath());
+
+        // Perfil activo (Taquilla / Tienda): uno por ventana.
+        services.AddScoped<ActiveProfile>();
 
         return services.BuildServiceProvider();
     }
