@@ -20,7 +20,7 @@ public class Sale
     public PaymentMethod PaymentMethod { get; set; }
     public decimal Total { get; set; }
     public bool Canceled { get; set; }
-    public List<SalesLine> Lineas { get; set; } = [];
+    public List<SalesLine> Lines { get; set; } = [];
 }
 
 public class SalesLine
@@ -37,6 +37,8 @@ public class SalesLine
     public decimal UnitPrice { get; set; }
 
     public decimal Subtotal => Amount * UnitPrice;
+
+    public ProductCategory Category { get; set; } = ProductCategory.Shop;
 }
 
 public enum CashMovementType

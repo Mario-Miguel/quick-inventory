@@ -46,7 +46,7 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
 
         model.Entity<Sale>(e =>
         {
-            e.HasMany(v => v.Lineas).WithOne().HasForeignKey(l => l.SaleId);
+            e.HasMany(v => v.Lines).WithOne().HasForeignKey(l => l.SaleId);
             e.HasIndex(v => v.Date);
         });
 

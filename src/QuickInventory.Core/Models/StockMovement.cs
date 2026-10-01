@@ -26,4 +26,5 @@ public class StockMovement
 
     /// <summary>Sale que originó el movimiento, si la hay.</summary>
     public int? SaleId { get; set; }
+    public Sale? Sale { get; set; }
 }

@@ -13,6 +13,7 @@ public static class DataConfiguration
     {
         services.AddDbContextFactory<BaseDbContext>(o => o.UseSqlite($"Data Source={databasePath}"));
         services.AddScoped<IInventoryService, InventoryService>();
+        services.AddScoped<ISalesService, SalesService>();
         return services;
     }
 
