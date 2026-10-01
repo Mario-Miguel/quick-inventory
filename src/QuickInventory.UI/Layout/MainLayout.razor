@@ -1,0 +1,40 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager Navigation
+
+<MudThemeProvider Theme="Theme.Museo" />
+<MudPopoverProvider />
+<MudDialogProvider CloseButton="true" BackdropClick="false" />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1">
+        @if (!InHomepage)
+        {
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                           Color="Color.Inherit"
+                           Size="Size.Large"
+                           Href="/"
+                           aria-label="Volver al inicio" />
+        }
+        <MudText Typo="Typo.h6" Class="ml-2">Museo de la Sidra</MudText>
+        <MudSpacer />
+        <MudText Typo="Typo.body1" Class="header-date">@DateTime.Today.ToString("dddd, d 'de' MMMM 'de' yyyy")</MudText>
+    </MudAppBar>
+
+    <MudMainContent Class="pt-16">
+        <MudContainer MaxWidth="MaxWidth.Large" Class="py-6">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool InHomepage => Navigation.ToBaseRelativePath(Navigation.Uri).Trim('/').Length == 0;
+
+    protected override void OnInitialized() => Navigation.LocationChanged += OnNavigation;
+
+    private void OnNavigation(object? sender, LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Navigation.LocationChanged -= OnNavigation;
+}

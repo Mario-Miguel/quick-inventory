@@ -1,0 +1,95 @@
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudStack Spacing="3">
+                <MudTextField T="string"
+                              @bind-Value="Product.Name"
+                              Label="Name"
+                              Required="true"
+                              RequiredError="Escribe el nombre del product"
+                              AutoFocus="true"
+                              Variant="Variant.Outlined" />
+
+                <MudTextField T="string"
+                              @bind-Value="Product.Category"
+                              Label="Categoría"
+                              Placeholder="Ej.: Entradas, Tienda, Bebidas"
+                              Variant="Variant.Outlined" />
+
+                <MudTextField T="string"
+                              @bind-Value="Product.BarCode"
+                              Label="Código de barras (opcional)"
+                              HelperText="Puedes escanearlo con el lector"
+                              Variant="Variant.Outlined" />
+
+                <div class="d-flex gap-4">
+                    <MudNumericField T="decimal"
+                                     @bind-Value="Product.SalePrice"
+                                     Label="Precio de venta"
+                                     Min="0m"
+                                     Format="N2"
+                                     Adornment="Adornment.End"
+                                     AdornmentText="€"
+                                     Variant="Variant.Outlined" />
+                    <MudNumericField T="decimal"
+                                     @bind-Value="Product.CostPrice"
+                                     Label="Precio de coste"
+                                     HelperText="Lo que le cuesta al museo"
+                                     Min="0m"
+                                     Format="N2"
+                                     Adornment="Adornment.End"
+                                     AdornmentText="€"
+                                     Variant="Variant.Outlined" />
+                </div>
+
+                <MudSwitch T="bool"
+                           @bind-Value="Product.StockControl"
+                           Color="Color.Primary"
+                           Label="Llevar control de unidades (desactívalo para entradas o servicios)" />
+
+                @if (Product.StockControl)
+                {
+                    <div class="d-flex gap-4">
+                        @if (IsNew)
+                        {
+                            <MudNumericField T="int"
+                                             @bind-Value="Product.Stock"
+                                             Label="Unidades iniciales"
+                                             Min="0"
+                                             Variant="Variant.Outlined" />
+                        }
+                        <MudNumericField T="int"
+                                         @bind-Value="Product.MinStock"
+                                         Label="Avisar cuando queden"
+                                         HelperText="Se marcará como stock bajo"
+                                         Min="0"
+                                         Variant="Variant.Outlined" />
+                    </div>
+                }
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Size="Size.Large" OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary" OnClick="Guardar">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter] public Product Product { get; set; } = new();
+
+    private MudForm form = default!;
+
+    private bool IsNew => Product.Id == 0;
+
+    private async Task Guardar()
+    {
+        await form.ValidateAsync();
+        if (!form.IsValid) return;
+        Dialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel() => Dialog.Cancel();
+}

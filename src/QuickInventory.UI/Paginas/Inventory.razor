@@ -1,0 +1,223 @@
+@page "/inventory"
+@inject IInventoryService InventoryService
+@inject IDialogService Dialogs
+@inject ISnackbar Warnings
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    <h1 class="page-title mb-0">Inventario</h1>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="NewProduct">
+        Nuevo product
+    </MudButton>
+</div>
+
+@if (products is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Class="pa-4 mb-4 d-flex flex-wrap align-center gap-4" Elevation="0" Outlined="true">
+        <MudTextField T="string"
+                      @bind-Value="searching"
+                      Placeholder="Buscar por nombre, categoría o código de barras"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true"
+                      Clearable="true"
+                      AutoFocus="true"
+                      Variant="Variant.Outlined"
+                      Class="finder" />
+        <MudSwitch T="bool"
+                   @bind-Value="lowStockOnly"
+                   Color="Color.Warning"
+                   Label="@($"Solo stock bajo ({LowStockNum})")" />
+    </MudPaper>
+
+    <MudTable T="Product"
+              Items="products"
+              Filter="new Func<Product, bool>(Filter)"
+              Hover="true"
+              Striped="true"
+              Elevation="1"
+              RowsPerPage="25"
+              Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>
+                <MudTableSortLabel T="Product" SortBy="p => p.Name" InitialDirection="SortDirection.Ascending">Producto</MudTableSortLabel>
+            </MudTh>
+            <MudTh>
+                <MudTableSortLabel T="Product" SortBy="p => p.Category">Categoría</MudTableSortLabel>
+            </MudTh>
+            <MudTh Style="text-align:right">
+                <MudTableSortLabel T="Product" SortBy="p => p.SalePrice">Precio</MudTableSortLabel>
+            </MudTh>
+            <MudTh Style="text-align:right">
+                <MudTableSortLabel T="Product" SortBy="p => p.Stock">Stock</MudTableSortLabel>
+            </MudTh>
+            <MudTh Style="text-align:right">Acciones</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Product">
+                <div class="product-name">@context.Name</div>
+                @if (context.BarCode is not null)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.BarCode</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Categoría">@context.Category</MudTd>
+            <MudTd DataLabel="Precio" Style="text-align:right">@context.SalePrice.ToString("C")</MudTd>
+            <MudTd DataLabel="Stock" Style="text-align:right">
+                @if (!context.StockControl)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">No aplica</MudText>
+                }
+                else if (context.LowStock)
+                {
+                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.Warning">
+                        @context.Stock
+                    </MudChip>
+                }
+                else
+                {
+                    @context.Stock
+                }
+            </MudTd>
+            <MudTd Style="text-align:right; white-space:nowrap">
+                @if (context.StockControl)
+                {
+                    <MudTooltip Text="Input o salida de unidades">
+                        <MudIconButton Icon="@Icons.Material.Filled.SwapVert"
+                                       Color="Color.Primary"
+                                       OnClick="() => AdjustStock(context)"
+                                       aria-label="Ajustar stock" />
+                    </MudTooltip>
+                }
+                <MudTooltip Text="Editar">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   OnClick="() => Edit(context)"
+                                   aria-label="Editar" />
+                </MudTooltip>
+                <MudTooltip Text="Dar de baja">
+                    <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
+                                   Color="Color.Error"
+                                   OnClick="() => Unsuscribe(context)"
+                                   aria-label="Dar de baja" />
+                </MudTooltip>
+            </MudTd>
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <MudText Class="pa-4">No hay productos que coincidan con la búsqueda.</MudText>
+        </NoRecordsContent>
+
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Filas por página:"
+                           InfoFormat="{first_item}-{last_item} de {all_items}" />
+        </PagerContent>
+    </MudTable>
+}
+
+@code {
+    private List<Product>? products;
+    private string searching = "";
+    private bool lowStockOnly;
+
+    private int LowStockNum => products?.Count(p => p.LowStock) ?? 0;
+
+    private static readonly DialogOptions CustomDialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+    };
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load() => products = await InventoryService.GetProductsAsync();
+
+    // Búsqueda sin distinguir mayúsculas ni tildes ("camiseta" encuentra "Camiseta").
+    private bool Filter(Product p)
+    {
+        if (lowStockOnly && !p.LowStock) return false;
+        if (string.IsNullOrWhiteSpace(searching)) return true;
+
+        var texto = searching.Trim();
+        return Contains(p.Name, texto)
+            || Contains(p.Category, texto)
+            || Contains(p.BarCode, texto);
+    }
+
+    private static bool Contains(string? origin, string text) =>
+        origin is not null &&
+        CultureInfo.CurrentCulture.CompareInfo.IndexOf(
+            origin, text, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0;
+
+    private Task NewProduct() => OpenEditor(new Product(), "Nuevo producto");
+
+    // Se edita una copia: si el usuario cancela, la tabla no cambia.
+    private Task Edit(Product p) => OpenEditor(p.Clone(), "Editar producto");
+
+    private async Task OpenEditor(Product product, string titulo)
+    {
+        var parameters = new DialogParameters<ProductDialog> { { x => x.Product, product } };
+        var dialog = await Dialogs.ShowAsync<ProductDialog>(titulo, parameters, CustomDialogOptions);
+        var result = await dialog.Result;
+        if (result is null || result.Canceled) return;
+
+        await Execute(
+            () => InventoryService.SaveProductAsync(product),
+            $"«{product.Name}» guardado.");
+    }
+
+    private async Task AdjustStock(Product product)
+    {
+        var parameters = new DialogParameters<StockAdjustDialog> { { x => x.Product, product } };
+        var dialog = await Dialogs.ShowAsync<StockAdjustDialog>("Input o salida de stock", parameters, CustomDialogOptions);
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not StockAdjust adjust) return;
+
+        await Execute(
+            () => InventoryService.AdjustStockAsync(product.Id, adjust.Amount, adjust.Description),
+            $"Stock de «{product.Name}» actualizado.");
+    }
+
+    private async Task Unsuscribe(Product product)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Dar de baja",
+            $"¿Seguro que quieres dar de baja «{product.Name}»? Dejará de aparecer en el inventario, pero se conserva su historial.",
+            yesText: "Dar de baja",
+            cancelText: "Cancelar");
+
+        if (confirmed != true) return;
+
+        await Execute(
+            () => InventoryService.UnsuscribeProductAsync(product.Id),
+            $"«{product.Name}» dado de baja.");
+    }
+
+    /// <summary>Ejecuta una operación, muestra el aviso correspondiente y recarga la tabla.</summary>
+    private async Task Execute(Func<Task> operation, string succeedMessage)
+    {
+        try
+        {
+            await operation();
+            Warnings.Add(succeedMessage, Severity.Success);
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el cambio. Inténtalo de nuevo.", Severity.Error);
+        }
+
+        await Load();
+    }
+}

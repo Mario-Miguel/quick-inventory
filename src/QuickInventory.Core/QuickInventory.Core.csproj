@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Modelos y reglas de negocio. No depende de la interfaz ni de la base de datos,
+       así se puede reutilizar tal cual en la futura versión web. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>QuickInventory.Core</RootNamespace>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,13 @@
+@* Componente raíz: lo cargan tanto la app de escritorio como (en el futuro) la web. *@
+<Router AppAssembly="typeof(Main).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="typeof(MainLayout)">
+            <MudText Typo="Typo.h5">Esta pantalla no existe.</MudText>
+            <MudButton Href="/" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4">Volver al inicio</MudButton>
+        </LayoutView>
+    </NotFound>
+</Router>

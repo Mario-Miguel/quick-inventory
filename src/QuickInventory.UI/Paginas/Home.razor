@@ -1,0 +1,36 @@
+@page "/"
+
+<h1 class="page-title">¿Qué quieres hacer?</h1>
+
+<MudGrid Spacing="4">
+    @foreach (var module in modules)
+    {
+        <MudItem xs="12" md="6">
+            <MudButton Href="@module.Route"
+                       Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Class="button-module">
+                <div class="d-flex align-center gap-6" style="width:100%">
+                    <MudIcon Icon="@module.Icon" Class="icon-module" />
+                    <div class="text-left">
+                        <div class="title-module">@module.Title</div>
+                        <div class="description-module">@module.Description</div>
+                    </div>
+                </div>
+            </MudButton>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    private sealed record Module(string Title, string Description, string Icon, string Route);
+
+    private readonly Module[] modules =
+    [
+        new("Sales", "Cobrar entradas y artículos de la tienda", Icons.Material.Filled.PointOfSale, "/ventas"),
+        new("Inventario", "Productos, precios y unidades en almacén", Icons.Material.Filled.Inventory2, "/inventory"),
+        new("Ingresos", "Subvenciones, visitas concertadas y otros cobros", Icons.Material.Filled.TrendingUp, "/ingresos"),
+        new("Pagos", "Proveedores, facturas y otros gastos", Icons.Material.Filled.Payments, "/pagos"),
+    ];
+}

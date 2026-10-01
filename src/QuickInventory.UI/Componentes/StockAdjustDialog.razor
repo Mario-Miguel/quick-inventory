@@ -1,0 +1,84 @@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.h6">@Product.Name</MudText>
+        <MudText Class="mb-4 mud-text-secondary">Unidades actuales: <b>@Product.Stock</b></MudText>
+
+        @* Dos botones grandes en vez de un desplegable: más rápido y sin errores. *@
+        <div class="d-flex gap-3 mb-4">
+            <MudButton Variant="@(isInput ? Variant.Filled : Variant.Outlined)"
+                       Color="Color.Success"
+                       Size="Size.Large"
+                       FullWidth="true"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="() => isInput = true">
+                Input
+            </MudButton>
+            <MudButton Variant="@(!isInput ? Variant.Filled : Variant.Outlined)"
+                       Color="Color.Error"
+                       Size="Size.Large"
+                       FullWidth="true"
+                       StartIcon="@Icons.Material.Filled.Remove"
+                       OnClick="() => isInput = false">
+                Output
+            </MudButton>
+        </div>
+
+        <MudStack Spacing="3">
+            <MudNumericField T="int"
+                             @bind-Value="amount"
+                             Label="Amount"
+                             Min="1"
+                             AutoFocus="true"
+                             Variant="Variant.Outlined" />
+
+            <MudTextField T="string"
+                          @bind-Value="description"
+                          Label="Description (opcional)"
+                          Placeholder="@(isInput ? "Ej.: pedido al proveedor" : "Ej.: rotura, regalo institucional")"
+                          Variant="Variant.Outlined" />
+
+            <MudAlert Severity="@(StockResult < 0 ? Severity.Error : Severity.Info)" Dense="true">
+                @if (StockResult < 0)
+                {
+                    <text>No hay unidades suficientes para esa salida.</text>
+                }
+                else
+                {
+                    <text>Quedarán <b>@StockResult</b> unidades.</text>
+                }
+            </MudAlert>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Size="Size.Large" OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Size="Size.Large"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   Disabled="@(!IsValid)"
+                   OnClick="Confirm">
+            Confirmar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter] public Product Product { get; set; } = new();
+
+    private bool isInput = true;
+    private int amount = 1;
+    private string? description;
+
+    private int Variation => isInput ? amount : -amount;
+    private int StockResult => Product.Stock + Variation;
+    private bool IsValid => amount > 0 && StockResult >= 0;
+
+    private void Confirm()
+    {
+        if (!IsValid) return;
+        Dialog.Close(DialogResult.Ok(new StockAdjust(Variation, description)));
+    }
+
+    private void Cancel() => Dialog.Cancel();
+}

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Acceso a datos con Entity Framework Core.
+       Hoy usa SQLite (un archivo local); en la versión web bastará con cambiar
+       el proveedor a PostgreSQL o SQL Server. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>QuickInventory.Data</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\QuickInventory.Core\QuickInventory.Core.csproj" />
+  </ItemGroup>
+
+</Project>

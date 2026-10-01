@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!-- Ventana de Windows (WPF) que muestra las pantallas Blazor del proyecto UI. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>QuickInventory.Desktop</RootNamespace>
+    <AssemblyName>QuickInventory</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\QuickInventory.UI\QuickInventory.UI.csproj" />
+    <ProjectReference Include="..\QuickInventory.Data\QuickInventory.Data.csproj" />
+  </ItemGroup>
+
+</Project>

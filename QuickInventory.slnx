@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/QuickInventory.Desktop/QuickInventory.Desktop.csproj" />
+    <Project Path="src/QuickInventory.UI/QuickInventory.UI.csproj" />
+    <Project Path="src/QuickInventory.Core/QuickInventory.Core.csproj" />
+    <Project Path="src/QuickInventory.Data/QuickInventory.Data.csproj" />
+  </Folder>
+</Solution>

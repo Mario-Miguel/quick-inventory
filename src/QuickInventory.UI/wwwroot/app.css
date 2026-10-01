@@ -1,0 +1,87 @@
+/* Estilos propios de la aplicación (complementan a MudBlazor). */
+
+html,
+body {
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: 16px;
+}
+
+.page-title {
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0 0 1.5rem 0;
+  color: #1f2937;
+}
+
+.page-title:focus {
+  outline: none;
+}
+
+/* Pantalla de inicio: botones grandes, fáciles de ver y de pulsar */
+.button-module {
+  min-height: 140px;
+  padding: 24px 32px !important;
+  justify-content: flex-start !important;
+  background: #ffffff;
+  border-width: 2px !important;
+}
+
+.icon-module {
+  font-size: 3.5rem !important;
+  flex-shrink: 0;
+}
+
+.title-module {
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.description-module {
+  font-size: 1rem;
+  color: #4b5563;
+  font-weight: 400;
+  margin-top: 4px;
+}
+
+.header-date::first-letter {
+  text-transform: uppercase;
+}
+
+/* Inventario */
+.finder {
+  flex: 1 1 360px;
+}
+
+.product-name {
+  font-weight: 600;
+}
+
+/* Botones un poco más gruesos en toda la app */
+.mud-button-root {
+  font-weight: 600;
+}
+
+/* Aviso de error de Blazor */
+#blazor-error-ui {
+  background: #fef3c7;
+  bottom: 0;
+  box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+  display: none;
+  left: 0;
+  padding: 0.8rem 1.25rem;
+  position: fixed;
+  width: 100%;
+  z-index: 2000;
+}
+
+#blazor-error-ui .reload {
+  margin-left: 1rem;
+}
+
+#blazor-error-ui .dismiss {
+  cursor: pointer;
+  position: absolute;
+  right: 0.75rem;
+  top: 0.5rem;
+}

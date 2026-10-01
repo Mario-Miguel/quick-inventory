@@ -1,0 +1,11 @@
+<Project>
+  <!-- Opciones comunes a todos los proyectos de la solución -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Company>Museo de la Sidra</Company>
+    <Product>Gestión Museo de la Sidra</Product>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>
