@@ -73,6 +73,10 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
             {
                 throw new BusinessRuleException("Linea sin cantidad.");
             }
+            if (line.Discount is { Amount: <= 0 or > 100 })
+            {
+                throw new BusinessRuleException("El descuento tiene que estar entre 0 y 100 %.");
+            }
             var product = await db.Products.FindAsync(line.ProductId) ?? throw new BusinessRuleException($"El producto {line.ProductId} no existe.");
             
             if (!product.Active)
@@ -109,7 +113,10 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
                 ProductId = product.Id,
                 Amount = line.Amount,
                 Description = product.Name,
-                UnitPrice = product.SalePrice,
+                BasePrice = product.SalePrice,
+                UnitPrice = line.Discount?.Apply(product.SalePrice) ?? product.SalePrice,
+                DiscountName = line.Discount?.Name,
+                DiscountPercent = line.Discount?.Amount ?? 0,
                 Category = product.Category
             });
         }

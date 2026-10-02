@@ -1,0 +1,256 @@
+@page "/sales/tickets"
+@inject IInventoryService InventoryService
+@inject ISalesService SalesService
+@inject IDialogService Dialogs
+@inject ISnackbar Warnings
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    <h1 class="page-title mb-0">Tickets</h1>
+</div>
+
+@if (tickets is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+
+    <MudGrid Spacing="8">
+        @* Izquierda (2/3): entradas que se pueden vender. Pulsar una la añade a la venta. *@
+        <MudItem xs="12" md="8">
+            <MudGrid Spacing="4">
+                @foreach (var ticket in tickets)
+                {
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   FullWidth="true"
+                                   Class="button-ticket"
+                                   OnClick="() => Add(ticket)">
+                            <div class="d-flex align-center gap-6" style="width:100%">
+                                <div class="align-center">
+                                    <div class="title-ticket">@ticket.Name</div>
+                                    <div class="description-ticket">Precio: @ticket.SalePrice €</div>
+                                </div>
+                            </div>
+                        </MudButton>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudItem>
+
+        @* Derecha (1/3): resumen de la venta actual. *@
+        <MudItem xs="12" md="4">
+            @* Título y total fijos; solo la lista de entradas hace scroll al llegar al alto máximo. *@
+            <MudPaper Class="pa-4 sale-summary" Outlined="true" MaxHeight="80vh">
+                <MudText Typo="Typo.h6" Class="mb-2">Venta actual</MudText>
+
+                @if (lines.Count == 0)
+                {
+                    <MudText Color="Color.Secondary">Pulsa una entrada para añadirla.</MudText>
+                }
+                else
+                {
+                    <div class="sale-summary-lines">
+                    @foreach (var line in lines)
+                    {
+                        <div class="d-flex align-center gap-2 py-2">
+                            <div class="flex-grow-1">
+                                <MudText Typo="Typo.body1"><b>@line.Product.Name</b></MudText>
+                                <MudText Typo="Typo.body2">@line.Amount x @line.UnitPrice.ToString("C")</MudText>
+                                @if (line.Discount is not null)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Class="ml-0">
+                                        @line.Discount.Name: -@line.Discount.Amount.ToString("0.##") %
+                                    </MudChip>
+                                }
+                            </div>
+                            @* El descuento se aplica a una sola entrada de la línea: si hay varias, se separa. *@
+                            <MudMenu Icon="@Icons.Material.Filled.Sell"
+                                     Variant="Variant.Outlined"
+                                     AnchorOrigin="Origin.BottomRight"
+                                     TransformOrigin="Origin.TopRight"
+                                     aria-label="Descuento">
+                                @if (line.Discount is not null)
+                                {
+                                    <MudMenuItem OnClick="() => MoveOne(line, null)">Sin descuento</MudMenuItem>
+                                }
+                                @foreach (var discount in SaleLineDiscount.All.Where(d => d != line.Discount))
+                                {
+                                    <MudMenuItem OnClick="() => MoveOne(line, discount)">
+                                        @discount.Name (-@discount.Amount.ToString("0.##") %)
+                                    </MudMenuItem>
+                                }
+                                <MudMenuItem OnClick="() => CustomDiscount(line)">Otro descuento…</MudMenuItem>
+                            </MudMenu>
+                            <MudIconButton Icon="@Icons.Material.Filled.Remove"
+                                           Variant="Variant.Outlined"
+                                           OnClick="() => Subtract(line)"
+                                           aria-label="Quitar una" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                           Variant="Variant.Outlined"
+                                           OnClick="() => line.Amount++"
+                                           aria-label="Añadir una" />
+                        </div>
+                        <MudDivider />
+                    }
+                    </div>
+
+                    <div class="d-flex justify-space-between align-center mt-4">
+                        <MudText Typo="Typo.h6">Total</MudText>
+                        <MudText Typo="Typo.h5"><b>@Total.ToString("C")</b></MudText>
+                    </div>
+
+                    @* Método de pago: botones grandes en vez de un desplegable, el elegido va relleno. *@
+                    <MudGrid Spacing="2" Class="mt-2">
+                        @foreach (var method in Enum.GetValues<PaymentMethod>())
+                        {
+                            <MudItem xs="6">
+                                <MudButton Variant="@(method == paymentMethod ? Variant.Filled : Variant.Outlined)"
+                                           Color="Color.Primary"
+                                           FullWidth="true"
+                                           StartIcon="@PaymentMethods.Icon(method)"
+                                           OnClick="() => paymentMethod = method">
+                                    @PaymentMethods.Name(method)
+                                </MudButton>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                    
+                    <div class="d-flex justify-space-between align-center mt-4">
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Error"
+                               StartIcon="@Icons.Material.Filled.Delete"
+                               FullWidth="true"
+                               Class="mt-4"
+                               OnClick="lines.Clear">
+                        Vaciar
+                    </MudButton>
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Success"
+                               StartIcon="@Icons.Material.Filled.Check"
+                               FullWidth="true"
+                               Disabled="@(!IsValid)"
+                               Class="mt-4"
+                               OnClick="ConfirmSale">
+                        Confirmar
+                    </MudButton>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private List<Product>? tickets;
+
+    /// <summary>Entradas de la venta actual, en el orden en que se han añadido.</summary>
+    private readonly List<SelectedTicket> lines = [];
+        
+    private PaymentMethod? paymentMethod=null;
+
+    /// <summary>Unidades de una entrada con el mismo descuento (o sin descuento).</summary>
+    private sealed class SelectedTicket(Product product, SaleLineDiscount? discount)
+    {
+        public Product Product { get; } = product;
+        public SaleLineDiscount? Discount { get; } = discount;
+        public int Amount { get; set; } = 1;
+        // El mismo cálculo que hace SalesService al guardar, para que el total coincida.
+        public decimal UnitPrice => Discount?.Apply(Product.SalePrice) ?? Product.SalePrice;
+    }
+
+    private decimal Total => lines.Sum(l => l.Amount * l.UnitPrice);
+
+    private void Add(Product ticket, SaleLineDiscount? discount = null)
+    {
+        var line = lines.FirstOrDefault(l => l.Product.Id == ticket.Id && l.Discount == discount);
+        if (line is null) lines.Add(new SelectedTicket(ticket, discount));
+        else line.Amount++;
+    }
+
+    /// <summary>Pasa una entrada de la línea a la línea con el descuento indicado.</summary>
+    private void MoveOne(SelectedTicket line, SaleLineDiscount? discount)
+    {
+        Subtract(line);
+        Add(line.Product, discount);
+    }
+
+    private async Task CustomDiscount(SelectedTicket line)
+    {
+        var parameters = new DialogParameters<CustomDiscountDialog> { { x => x.Product, line.Product } };
+        var dialog = await Dialogs.ShowAsync<CustomDiscountDialog>("Otro descuento", parameters, CustomDialogOptions);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: SaleLineDiscount discount })
+            MoveOne(line, discount);
+    }
+
+    private void Subtract(SelectedTicket line)
+    {
+        if (--line.Amount == 0) lines.Remove(line);
+    }
+
+    private bool IsValid => lines.Count>0 && paymentMethod!=null;
+
+
+    private static readonly DialogOptions CustomDialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+    };
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load() => tickets = await InventoryService.GetProductsAsync(SalesPoint.TicketOffice);
+
+
+    private async Task ConfirmSale()
+    {
+        if (!IsValid) return;
+
+        var dialog = await Dialogs.ShowAsync<CustomConfirmationDialog>("Confirmar venta", CustomDialogOptions);
+        var result = await dialog.Result;
+        if (result is null || result.Canceled) return;
+
+        var cart = lines.Select(l => new CartLine(l.Product.Id, l.Amount, l.Discount)).ToList();
+        var total = Total;
+
+        var saved = await Execute(
+            () => SalesService.RegisterSaleAsync(SalesPoint.TicketOffice, paymentMethod!.Value, cart),
+            $"Venta guardada: {total:C}.");
+
+        // Si no se ha podido guardar, se deja la venta como estaba para poder reintentarlo.
+        if (saved)
+        {
+            lines.Clear();
+            paymentMethod = null;
+        }
+    }
+
+    /// <summary>
+    /// Ejecuta una operación, muestra el aviso correspondiente y recarga las entradas.
+    /// Devuelve si ha ido bien.
+    /// </summary>
+    private async Task<bool> Execute(Func<Task> operation, string succeedMessage)
+    {
+        var ok = false;
+        try
+        {
+            await operation();
+            Warnings.Add(succeedMessage, Severity.Success);
+            ok = true;
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar la venta. Inténtalo de nuevo.", Severity.Error);
+        }
+
+        await Load();
+        return ok;
+    }
+
+}

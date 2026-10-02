@@ -44,6 +44,27 @@ body {
   margin-top: 4px;
 }
 
+.button-ticket {
+  min-height: 140px;
+  padding: 24px !important;
+  justify-content: flex-start !important;
+  background: #ffffff;
+  border-width: 2px !important;
+}
+
+.title-ticket {
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.description-ticket {
+  font-size: 1rem;
+  color: #4b5563;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
 .header-date::first-letter {
   text-transform: uppercase;
 }
@@ -84,4 +105,24 @@ body {
   position: absolute;
   right: 0.75rem;
   top: 0.5rem;
+}
+
+/* Resumen de la venta: cabecera y pie fijos, la lista hace scroll. */
+.sale-summary {
+    display: flex;
+    flex-direction: column;
+}
+
+.sale-summary-lines {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* Inicio: ocupa todo el alto disponible para poder llevar el resumen abajo.
+   64px de la barra superior + 48px del padding (py-6) del contenedor. */
+.home-page {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 64px - 48px);
 }

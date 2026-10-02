@@ -8,12 +8,15 @@ public sealed record Module(string Title, string Description, string Icon, strin
 
 public static class Modules
 {
-    private static readonly SalesPoint[] Sellers = [SalesPoint.TicketOffice, SalesPoint.Shop];
+    private static readonly SalesPoint[] TicketOfficeOnly = [SalesPoint.TicketOffice];
+    private static readonly SalesPoint[] ShopOnly = [SalesPoint.Shop];
     private static readonly SalesPoint[] AdminOnly = [SalesPoint.Admin];
 
     public static readonly Module[] All =
     [
-        new("Ventas", "Cobrar entradas y artículos de la tienda", Icons.Material.Filled.PointOfSale, "/sales", Sellers),
+        new("Ventas", "Cobrar entradas", Icons.Material.Filled.ConfirmationNumber, "/sales/tickets", TicketOfficeOnly),
+        new("Ventas", "Cobrar artículos de la tienda", Icons.Material.Filled.PointOfSale, "/sales/shop", ShopOnly),
+        new("Estadísticas", "Ver estadísticas la taquilla", Icons.Material.Filled.PointOfSale, "/stats/tickets", TicketOfficeOnly),
         new("Inventario", "Productos, precios y unidades en almacén", Icons.Material.Filled.Inventory2, "/inventory", AdminOnly),
         new("Ingresos", "Subvenciones, visitas concertadas y otros cobros", Icons.Material.Filled.TrendingUp, "/incomes", AdminOnly),
         new("Pagos", "Proveedores, facturas y otros gastos", Icons.Material.Filled.Payments, "/payments", AdminOnly),

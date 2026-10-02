@@ -1,0 +1,59 @@
+@page "/"
+@inject ActiveProfile Profile
+@inject ISalesService SalesService
+@implements IDisposable
+
+<div class="home-page">
+    <h1 class="page-title">¿Qué quieres hacer?</h1>
+
+    <MudGrid Spacing="4">
+        @foreach (var module in Modules.For(Profile.Current))
+        {
+            <MudItem xs="12" md="6">
+                <MudButton Href="@module.Route" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                           Class="button-module">
+                    <div class="d-flex align-center gap-6" style="width:100%">
+                        <MudIcon Icon="@module.Icon" Class="icon-module" />
+                        <div class="text-left">
+                            <div class="title-module">@module.Title</div>
+                            <div class="description-module">@module.Description</div>
+                        </div>
+                    </div>
+                </MudButton>
+            </MudItem>
+        }
+    </MudGrid>
+    @if (Profile.Current == SalesPoint.TicketOffice)
+    {
+        @* mt-auto lo empuja a la parte baja de la pantalla. *@
+        <MudPaper Class="pa-4 mt-auto sale-summary" Outlined="true" MaxHeight="40vh">
+            <MudText Typo="Typo.h6" Class="mb-2">Total entradas hoy: @totalTickets</MudText>
+        </MudPaper>
+    }
+</div>
+
+@code {
+    // Al cambiar de perfil cambian las opciones que se muestran.
+
+    private void OnProfileChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Profile.Changed -= OnProfileChanged;
+
+    private int totalTickets;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        Profile.Changed += OnProfileChanged;
+        if (Profile.Current == SalesPoint.TicketOffice)
+        {
+            var from = DateTime.Today;
+            var to = DateTime.Now;
+            var sales = await SalesService.GetSalesAsync(from, to, SalesPoint.TicketOffice);
+            totalTickets = sales.Where(s => !s.Canceled).SelectMany(s => s.Lines).Sum(l => l.Amount);
+        }
+        
+    }
+
+}

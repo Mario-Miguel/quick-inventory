@@ -1,4 +1,3 @@
-@page "/sales"
 @page "/incomes"
 @page "/payments"
 @inject NavigationManager Navigation
@@ -16,7 +15,6 @@
 @code {
     private string Titulo => Navigation.ToBaseRelativePath(Navigation.Uri).Trim('/') switch
     {
-        "sales" => "Ventas",
         "incomes" => "Ingresos",
         "payments" => "Pagos",
         _ => ""
