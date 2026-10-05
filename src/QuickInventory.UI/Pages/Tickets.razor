@@ -1,4 +1,4 @@
-@page "/sales/tickets"
+@page "/tickets/sales"
 @inject IInventoryService InventoryService
 @inject ISalesService SalesService
 @inject IDialogService Dialogs
@@ -22,10 +22,7 @@ else
                 @foreach (var ticket in tickets)
                 {
                     <MudItem xs="12" sm="6" md="4">
-                        <MudButton Variant="Variant.Outlined"
-                                   Color="Color.Primary"
-                                   FullWidth="true"
-                                   Class="button-ticket"
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Class="button-ticket"
                                    OnClick="() => Add(ticket)">
                             <div class="d-flex align-center gap-6" style="width:100%">
                                 <div class="align-center">
@@ -52,49 +49,49 @@ else
                 else
                 {
                     <div class="sale-summary-lines">
-                    @foreach (var line in lines)
-                    {
-                        <div class="d-flex align-center gap-2 py-2">
-                            <div class="flex-grow-1">
-                                <MudText Typo="Typo.body1"><b>@line.Product.Name</b></MudText>
-                                <MudText Typo="Typo.body2">@line.Amount x @line.UnitPrice.ToString("C")</MudText>
-                                @if (line.Discount is not null)
-                                {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Class="ml-0">
-                                        @line.Discount.Name: -@line.Discount.Amount.ToString("0.##") %
-                                    </MudChip>
-                                }
+                        @foreach (var line in lines)
+                        {
+                            <div class="d-flex align-center gap-2 py-2">
+                                <div class="flex-grow-1">
+                                    <MudText Typo="Typo.body1"><b>@line.Product.Name</b></MudText>
+                                    <MudText Typo="Typo.body2">@line.Amount x @UnitPrice(line).ToString("C")</MudText>
+                                    @if (line.Discount is not null)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Class="ml-0">
+                                            @line.Discount.Name: -@line.Discount.Amount.ToString("0.##") %
+                                        </MudChip>
+                                    }
+                                </div>
+                                @* El descuento se aplica a una sola entrada de la línea: si hay varias, se separa. *@
+                                <MudMenu Icon="@Icons.Material.Filled.Sell" Variant="Variant.Outlined"
+                                         AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" aria-label="Descuento">
+                                    @if (line.Discount is not null)
+                                    {
+                                        <MudMenuItem OnClick="() => MoveOne(line, null)">Sin descuento</MudMenuItem>
+                                    }
+                                    @foreach (var discount in SaleLineDiscount.All.Where(d => d != line.Discount))
+                                    {
+                                        <MudMenuItem OnClick="() => MoveOne(line, discount)">
+                                            @discount.Name (-@discount.Amount.ToString("0.##") %)
+                                        </MudMenuItem>
+                                    }
+                                    <MudMenuItem OnClick="() => CustomDiscount(line)">Otro descuento…</MudMenuItem>
+                                </MudMenu>
+                                <MudIconButton Icon="@Icons.Material.Filled.Remove" Variant="Variant.Outlined"
+                                               OnClick="() => Subtract(line)" aria-label="Quitar una" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Add" Variant="Variant.Outlined"
+                                               OnClick="() => line.Amount++" aria-label="Añadir una" />
                             </div>
-                            @* El descuento se aplica a una sola entrada de la línea: si hay varias, se separa. *@
-                            <MudMenu Icon="@Icons.Material.Filled.Sell"
-                                     Variant="Variant.Outlined"
-                                     AnchorOrigin="Origin.BottomRight"
-                                     TransformOrigin="Origin.TopRight"
-                                     aria-label="Descuento">
-                                @if (line.Discount is not null)
-                                {
-                                    <MudMenuItem OnClick="() => MoveOne(line, null)">Sin descuento</MudMenuItem>
-                                }
-                                @foreach (var discount in SaleLineDiscount.All.Where(d => d != line.Discount))
-                                {
-                                    <MudMenuItem OnClick="() => MoveOne(line, discount)">
-                                        @discount.Name (-@discount.Amount.ToString("0.##") %)
-                                    </MudMenuItem>
-                                }
-                                <MudMenuItem OnClick="() => CustomDiscount(line)">Otro descuento…</MudMenuItem>
-                            </MudMenu>
-                            <MudIconButton Icon="@Icons.Material.Filled.Remove"
-                                           Variant="Variant.Outlined"
-                                           OnClick="() => Subtract(line)"
-                                           aria-label="Quitar una" />
-                            <MudIconButton Icon="@Icons.Material.Filled.Add"
-                                           Variant="Variant.Outlined"
-                                           OnClick="() => line.Amount++"
-                                           aria-label="Añadir una" />
-                        </div>
-                        <MudDivider />
-                    }
+                            <MudDivider />
+                        }
                     </div>
+
+                    <MudSwitch @bind-Value="guidedVisit" Color="Color.Primary" Class="mt-4">
+                        Visita guiada (+@Sale.GuidedVisitSupplement.ToString("C") por entrada)
+                    </MudSwitch>
+                    <MudSwitch @bind-Value="groupVisit" Color="Color.Primary" Class="mt-4">
+                        Visita grupal (-@Sale.GroupVisitDiscount.ToString("C") por entrada)
+                    </MudSwitch>
 
                     <div class="d-flex justify-space-between align-center mt-4">
                         <MudText Typo="Typo.h6">Total</MudText>
@@ -107,9 +104,7 @@ else
                         {
                             <MudItem xs="6">
                                 <MudButton Variant="@(method == paymentMethod ? Variant.Filled : Variant.Outlined)"
-                                           Color="Color.Primary"
-                                           FullWidth="true"
-                                           StartIcon="@PaymentMethods.Icon(method)"
+                                           Color="Color.Primary" FullWidth="true" StartIcon="@PaymentMethods.Icon(method)"
                                            OnClick="() => paymentMethod = method">
                                     @PaymentMethods.Name(method)
                                 </MudButton>
@@ -118,23 +113,14 @@ else
                     </MudGrid>
                     
                     <div class="d-flex justify-space-between align-center mt-4">
-                    <MudButton Variant="Variant.Text"
-                               Color="Color.Error"
-                               StartIcon="@Icons.Material.Filled.Delete"
-                               FullWidth="true"
-                               Class="mt-4"
-                               OnClick="lines.Clear">
-                        Vaciar
-                    </MudButton>
-                    <MudButton Variant="Variant.Text"
-                               Color="Color.Success"
-                               StartIcon="@Icons.Material.Filled.Check"
-                               FullWidth="true"
-                               Disabled="@(!IsValid)"
-                               Class="mt-4"
-                               OnClick="ConfirmSale">
-                        Confirmar
-                    </MudButton>
+                        <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                                   FullWidth="true" Class="mt-4" OnClick="lines.Clear">
+                            Vaciar
+                        </MudButton>
+                        <MudButton Variant="Variant.Text" Color="Color.Success" StartIcon="@Icons.Material.Filled.Check"
+                                   FullWidth="true" Disabled="@(!IsValid)" Class="mt-4" OnClick="ConfirmSale">
+                            Confirmar
+                        </MudButton>
                     </div>
                 }
             </MudPaper>
@@ -148,7 +134,10 @@ else
     /// <summary>Entradas de la venta actual, en el orden en que se han añadido.</summary>
     private readonly List<SelectedTicket> lines = [];
         
-    private PaymentMethod? paymentMethod=null;
+    private PaymentMethod? paymentMethod = null;
+
+    private bool guidedVisit;
+    private bool groupVisit;
 
     /// <summary>Unidades de una entrada con el mismo descuento (o sin descuento).</summary>
     private sealed class SelectedTicket(Product product, SaleLineDiscount? discount)
@@ -160,7 +149,11 @@ else
         public decimal UnitPrice => Discount?.Apply(Product.SalePrice) ?? Product.SalePrice;
     }
 
-    private decimal Total => lines.Sum(l => l.Amount * l.UnitPrice);
+    /// <summary>Precio por entrada, con el suplemento si es visita guiada (igual que en SalesService).</summary>
+    private decimal UnitPrice(SelectedTicket line) =>
+        line.UnitPrice + (guidedVisit ? Sale.GuidedVisitSupplement : 0) - (groupVisit ? Sale.GroupVisitDiscount : 0);
+
+    private decimal Total => lines.Sum(l => l.Amount * UnitPrice(l));
 
     private void Add(Product ticket, SaleLineDiscount? discount = null)
     {
@@ -190,7 +183,7 @@ else
         if (--line.Amount == 0) lines.Remove(line);
     }
 
-    private bool IsValid => lines.Count>0 && paymentMethod!=null;
+    private bool IsValid => lines.Count > 0 && paymentMethod != null;
 
 
     private static readonly DialogOptions CustomDialogOptions = new()
@@ -216,7 +209,7 @@ else
         var total = Total;
 
         var saved = await Execute(
-            () => SalesService.RegisterSaleAsync(SalesPoint.TicketOffice, paymentMethod!.Value, cart),
+            () => SalesService.RegisterSaleAsync(SalesPoint.TicketOffice, paymentMethod!.Value, cart, guidedVisit, groupVisit),
             $"Venta guardada: {total:C}.");
 
         // Si no se ha podido guardar, se deja la venta como estaba para poder reintentarlo.
@@ -224,6 +217,8 @@ else
         {
             lines.Clear();
             paymentMethod = null;
+            guidedVisit = false;
+            groupVisit = false;
         }
     }
 

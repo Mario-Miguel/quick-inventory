@@ -14,9 +14,10 @@ public static class Modules
 
     public static readonly Module[] All =
     [
-        new("Ventas", "Cobrar entradas", Icons.Material.Filled.ConfirmationNumber, "/sales/tickets", TicketOfficeOnly),
-        new("Ventas", "Cobrar artículos de la tienda", Icons.Material.Filled.PointOfSale, "/sales/shop", ShopOnly),
-        new("Estadísticas", "Ver estadísticas la taquilla", Icons.Material.Filled.PointOfSale, "/stats/tickets", TicketOfficeOnly),
+        new("Ventas", "Cobrar entradas", Icons.Material.Filled.ConfirmationNumber, "/tickets/sales", TicketOfficeOnly),
+        new("Ventas", "Cobrar artículos de la tienda", Icons.Material.Filled.PointOfSale, "/shop/sales", ShopOnly),
+        new("Cerrar caja", "Comprobación de la caja", Icons.Material.Filled.PointOfSale, "/tickets/close", TicketOfficeOnly),
+        new("Estadísticas", "Ver estadísticas la taquilla", Icons.Material.Filled.PointOfSale, "/tickets/summary", TicketOfficeOnly),
         new("Inventario", "Productos, precios y unidades en almacén", Icons.Material.Filled.Inventory2, "/inventory", AdminOnly),
         new("Ingresos", "Subvenciones, visitas concertadas y otros cobros", Icons.Material.Filled.TrendingUp, "/incomes", AdminOnly),
         new("Pagos", "Proveedores, facturas y otros gastos", Icons.Material.Filled.Payments, "/payments", AdminOnly),

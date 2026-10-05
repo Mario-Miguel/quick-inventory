@@ -126,3 +126,29 @@ body {
     flex-direction: column;
     min-height: calc(100vh - 64px - 48px);
 }
+
+/* Fila con el detalle de una venta: sin el fondo de hover de la tabla principal
+   (MudBlazor lo aplica también a cualquier tr impar en tablas con rayas). */
+.mud-table-hover .sale-detail-row:hover {
+    background-color: transparent !important;
+}
+
+/* Campo de cantidad del recuento de caja: estrecho, sin crecer, y el número centrado. */
+.count-input.mud-input-control {
+    flex: 0 0 64px;
+    width: 64px;
+    margin-top: 0;
+}
+
+.count-input input {
+    text-align: center;
+}
+
+/* Venta anulada en Estadísticas: fondo rojo suave, también en filas con rayas y al pasar el ratón. */
+.mud-table-row.sale-canceled-row {
+    background-color: color-mix(in srgb, var(--mud-palette-error) 20%, transparent) !important;
+}
+
+.mud-table-row.sale-canceled-row:hover {
+    background-color: color-mix(in srgb, var(--mud-palette-error) 30%, transparent) !important;
+}

@@ -1,3 +1,4 @@
+using System.Reflection.Metadata;
 using Microsoft.EntityFrameworkCore;
 using QuickInventory.Core;
 using QuickInventory.Core.Models;
@@ -52,7 +53,7 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
             .ToListAsync();
     }
 
-    public async Task<Sale> RegisterSaleAsync(SalesPoint salesPoint, PaymentMethod paymentMethod, IReadOnlyList<CartLine> lines)
+    public async Task<Sale> RegisterSaleAsync(SalesPoint salesPoint, PaymentMethod paymentMethod, IReadOnlyList<CartLine> lines, bool guidedVisit = false, bool groupVisit = false)
     {
         if (lines.Count == 0)
         {
@@ -62,10 +63,21 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
         {
             throw new BusinessRuleException("Admin no puede vender");
         }
+        if (guidedVisit && salesPoint != SalesPoint.TicketOffice)
+        {
+            throw new BusinessRuleException("Solo se pueden vender visitas guiadas en taquilla.");
+        }
+        if (groupVisit && salesPoint != SalesPoint.TicketOffice)
+        {
+            throw new BusinessRuleException("Solo se pueden hacer descuentos por grrupo en taquilla.");
+        }
 
         await using var db = await factory.CreateDbContextAsync();
 
-        var sale = new Sale{Date = DateTime.Now, SalesPoint= salesPoint, PaymentMethod= paymentMethod};
+        var sale = new Sale{Date = DateTime.Now, SalesPoint= salesPoint, PaymentMethod= paymentMethod, GuidedVisit = guidedVisit, GroupVisit = groupVisit};
+        // El suplemento de la visita guiada se suma después del descuento: el descuento es solo sobre la entrada.
+        var supplement = guidedVisit ? Sale.GuidedVisitSupplement : 0;
+        var groupDiscount = groupVisit ? Sale.GroupVisitDiscount : 0;
 
         foreach (var line in lines)
         {
@@ -113,8 +125,8 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
                 ProductId = product.Id,
                 Amount = line.Amount,
                 Description = product.Name,
-                BasePrice = product.SalePrice,
-                UnitPrice = line.Discount?.Apply(product.SalePrice) ?? product.SalePrice,
+                BasePrice = product.SalePrice + supplement,
+                UnitPrice = (line.Discount?.Apply(product.SalePrice) ?? product.SalePrice) + supplement - groupDiscount,
                 DiscountName = line.Discount?.Name,
                 DiscountPercent = line.Discount?.Amount ?? 0,
                 Category = product.Category
@@ -125,5 +137,21 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
         db.Sales.Add(sale);
         await db.SaveChangesAsync();
         return sale;
+    }
+
+    public async Task ChangePaymentMethodAsync(int saleId, PaymentMethod paymentMethod)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+
+        var sale = await db.Sales.FindAsync(saleId)
+            ?? throw new BusinessRuleException("La venta ya no existe.");
+
+        if (sale.Canceled)
+        {
+            throw new BusinessRuleException("La venta está anulada y no se puede cambiar.");
+        }
+
+        sale.PaymentMethod = paymentMethod;
+        await db.SaveChangesAsync();
     }
 }

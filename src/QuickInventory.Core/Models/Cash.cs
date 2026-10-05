@@ -20,7 +20,14 @@ public class Sale
     public PaymentMethod PaymentMethod { get; set; }
     public decimal Total { get; set; }
     public bool Canceled { get; set; }
+    /// <summary>Si es una visita guiada: cada entrada lleva el suplemento <see cref="GuidedVisitSupplement"/>.</summary>
+    public bool GuidedVisit { get; set; }
+    public bool GroupVisit { get; set; }
     public List<SalesLine> Lines { get; set; } = [];
+
+    /// <summary>Euros que se suman a cada entrada en una visita guiada (no se descuentan).</summary>
+    public const decimal GuidedVisitSupplement = 1m;
+    public const decimal GroupVisitDiscount = 0.5m;
 }
 
 public class SalesLine

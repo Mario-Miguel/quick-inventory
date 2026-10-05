@@ -1,0 +1,41 @@
+@* Solo se puede cambiar el método de pago: las entradas, precios y descuentos de una venta no se tocan. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Class="mb-4">Venta @Sale.Id · @Sale.Date.ToString("g") · <b>@Sale.Total.ToString("C")</b></MudText>
+        <MudText Typo="Typo.subtitle1" Class="mb-2">Método de pago</MudText>
+        @* Botones grandes en vez de un desplegable, como en la pantalla de venta; el elegido va relleno. *@
+        <MudGrid Spacing="2">
+            @foreach (var method in Enum.GetValues<PaymentMethod>())
+            {
+                <MudItem xs="6">
+                    <MudButton Variant="@(method == paymentMethod ? Variant.Filled : Variant.Outlined)"
+                               Color="Color.Primary" FullWidth="true" StartIcon="@PaymentMethods.Icon(method)"
+                               OnClick="() => paymentMethod = method">
+                        @PaymentMethods.Name(method)
+                    </MudButton>
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Size="Size.Large" OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary" OnClick="Save">Guardar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter] public Sale Sale { get; set; } = new();
+
+    // Se elige sobre una copia: si se cancela, la venta de la lista no cambia.
+    private PaymentMethod paymentMethod;
+
+    protected override void OnInitialized() => paymentMethod = Sale.PaymentMethod;
+
+    /// <summary>Devuelve el método de pago elegido.</summary>
+    private void Save() => Dialog.Close(DialogResult.Ok(paymentMethod));
+
+    private void Cancel() => Dialog.Cancel();
+}

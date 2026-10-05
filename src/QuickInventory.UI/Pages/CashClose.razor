@@ -1,0 +1,166 @@
+@page "/tickets/close"
+@inject ISalesService SalesService
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    <h1 class="page-title mb-0">Cerrar caja</h1>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="Load">
+        Actualizar ventas
+    </MudButton>
+    <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.RestartAlt" OnClick="Reset">
+        Empezar el recuento de nuevo
+    </MudButton>
+</div>
+
+@if (ticketSales is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Spacing="6">
+        @* Izquierda: recuento de billetes y monedas que hay en la caja. *@
+        <MudItem xs="12" md="8">
+            <MudGrid Spacing="4">
+                <MudItem xs="12" lg="6">
+                    <MudPaper Class="pa-4" Outlined="true">
+                        <MudText Typo="Typo.h6" Class="mb-2">Billetes</MudText>
+                        @foreach (var value in Bills)
+                        {
+                            @DenominationRow(value)
+                        }
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" lg="6">
+                    <MudPaper Class="pa-4" Outlined="true">
+                        <MudText Typo="Typo.h6" Class="mb-2">Monedas</MudText>
+                        @foreach (var value in Coins)
+                        {
+                            @DenominationRow(value)
+                        }
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudItem>
+
+        @* Derecha: lo vendido hoy y la comparación con lo contado. *@
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-4 mb-4" Outlined="true">
+                <MudText Typo="Typo.h6" Class="mb-2">Entradas vendidas hoy</MudText>
+                @foreach (var (method, count, amount) in totals)
+                {
+                    <div class="d-flex align-center gap-3 py-2">
+                        <MudIcon Icon="@PaymentMethods.Icon(method)" Color="Color.Primary" />
+                        <div class="flex-grow-1">
+                            <MudText Typo="Typo.body1"><b>@PaymentMethods.Name(method)</b></MudText>
+                            <MudText Typo="Typo.body2">@count @(count == 1 ? "venta" : "ventas")</MudText>
+                        </div>
+                        <MudText Typo="Typo.h6">@amount.ToString("C")</MudText>
+                    </div>
+                    <MudDivider />
+                }
+                <div class="d-flex justify-space-between align-center mt-4">
+                    <MudText Typo="Typo.h6">Total</MudText>
+                    <MudText Typo="Typo.h5"><b>@totals.Sum(t => t.Amount).ToString("C")</b></MudText>
+                </div>
+            </MudPaper>
+
+            @* Solo el efectivo está en la caja: tarjeta, Bizum y transferencia no se cuentan aquí. *@
+            <MudPaper Class="pa-4" Outlined="true">
+                <MudText Typo="Typo.h6" Class="mb-2">Cuadre del efectivo</MudText>
+
+                <MudNumericField T="decimal" @bind-Value="openingFloat" Label="Dinero en la caja al empezar el día" Min="0"
+                                 Format="0.00" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.End"
+                                 AdornmentText="€" HideSpinButtons="true" Class="mb-4" />
+
+                <div class="d-flex justify-space-between py-1">
+                    <MudText>Dinero al empezar</MudText>
+                    <MudText>@openingFloat.ToString("C")</MudText>
+                </div>
+                <div class="d-flex justify-space-between py-1">
+                    <MudText>+ Vendido en efectivo</MudText>
+                    <MudText>@CashSold.ToString("C")</MudText>
+                </div>
+                <div class="d-flex justify-space-between py-1">
+                    <MudText><b>Debería haber</b></MudText>
+                    <MudText><b>@Expected.ToString("C")</b></MudText>
+                </div>
+                <div class="d-flex justify-space-between py-1">
+                    <MudText><b>Hay en la caja</b></MudText>
+                    <MudText><b>@Counted.ToString("C")</b></MudText>
+                </div>
+                <MudDivider Class="my-2" />
+
+                @* Contado menos lo que debería haber: positivo si sobra, negativo si falta. *@
+                <MudAlert
+                    Severity="@(Difference == 0 ? Severity.Success : Difference > 0 ? Severity.Warning : Severity.Error)"
+                    Variant="Variant.Filled" Class="mt-2">
+                    @if (Difference == 0)
+                    {
+                        <b>La caja cuadra.</b>
+                    }
+                    else if (Difference > 0)
+                    {
+                        <b>Sobran @Difference.ToString("C")</b>
+                    }
+                    else
+                    {
+                        <b>Faltan @((-Difference).ToString("C"))</b>
+                    }
+                </MudAlert>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private List<Sale>? ticketSales;
+    private List<(PaymentMethod Method, int Count, decimal Amount)> totals = [];
+
+    private static readonly decimal[] Bills = [500m, 200m, 100m, 50m, 20m, 10m, 5m];
+    private static readonly decimal[] Coins = [2m, 1m, 0.50m, 0.20m, 0.10m, 0.05m, 0.02m, 0.01m];
+
+    /// <summary>Unidades contadas de cada billete o moneda.</summary>
+    private readonly Dictionary<decimal, int> counts = Bills.Concat(Coins).ToDictionary(v => v, _ => 0);
+
+    private decimal openingFloat = 137.0m;
+
+    private decimal CashSold => totals.Where(t => t.Method == PaymentMethod.Cash).Sum(t => t.Amount);
+    private decimal Expected => openingFloat + CashSold;
+    private decimal Counted => counts.Sum(c => c.Key * c.Value);
+    private decimal Difference => Counted - Expected;
+
+    private static string Label(decimal value) => value < 1 ? $"{value * 100:0} cént." : $"{value:0} €";
+
+    @* <summary>Fila de un billete o moneda: botones grandes para ir sumando y un campo para escribir la
+    cantidad.</summary>*@
+    private RenderFragment DenominationRow(decimal value) =>
+        @<div class="d-flex align-center gap-2 py-1">
+            <MudText Typo="Typo.body1" Style="width:72px"><b>@Label(value)</b></MudText>
+            @* −, cantidad y + juntos; el campo tiene ancho fijo para que no ocupe toda la fila. *@
+            <div class="d-flex align-center gap-1">
+                <MudIconButton Icon="@Icons.Material.Filled.Remove" Variant="Variant.Outlined" Disabled="@(counts[value] == 0)"
+                               OnClick="() => counts[value]--" aria-label="Quitar uno" />
+                <MudNumericField T="int" @bind-Value="counts[value]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                 HideSpinButtons="true" Class="count-input" />
+                <MudIconButton Icon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" OnClick="() => counts[value]++"
+                               aria-label="Añadir uno" />
+            </div>
+            <MudText Typo="Typo.body1" Class="ml-auto">@((value * counts[value]).ToString("C"))</MudText>
+        </div>;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    // Hasta mañana a las 00:00 y no hasta "ahora"
+    private async Task Load()
+    {
+        ticketSales = await SalesService.GetSalesAsync(DateTime.Today, DateTime.Today.AddDays(1), SalesPoint.TicketOffice);
+        totals = PaymentMethods.Totals(ticketSales);
+    }
+
+    private void Reset()
+    {
+        foreach (var value in Bills.Concat(Coins)) counts[value] = 0;
+        openingFloat = 0;
+    }
+}

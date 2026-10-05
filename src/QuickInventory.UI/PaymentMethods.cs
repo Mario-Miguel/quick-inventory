@@ -22,4 +22,18 @@ public static class PaymentMethods
         PaymentMethod.Bizum => Icons.Material.Filled.PhoneAndroid,
         _ => Icons.Material.Filled.AccountBalance
     };
+
+    /// <summary>
+    /// Número de ventas e importe cobrado con cada método de pago, sin las anuladas.
+    /// Salen todos los métodos, también los que no se han usado (a 0).
+    /// </summary>
+    public static List<(PaymentMethod Method, int Count, decimal Amount)> Totals(IEnumerable<Sale> sales)
+    {
+        var valid = sales.Where(s => !s.Canceled).ToList();
+        return Enum.GetValues<PaymentMethod>().Select(method =>
+        {
+            var ofMethod = valid.Where(s => s.PaymentMethod == method).ToList();
+            return (method, ofMethod.Count, ofMethod.Sum(s => s.Total));
+        }).ToList();
+    }
 }
