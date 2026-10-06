@@ -1,4 +1,3 @@
-@page "/tickets/close"
 @inject ISalesService SalesService
 
 <div class="d-flex align-center flex-wrap gap-4 mb-4">
@@ -12,7 +11,7 @@
     </MudButton>
 </div>
 
-@if (ticketSales is null)
+@if (productSales is null)
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
 }
@@ -114,7 +113,9 @@ else
 }
 
 @code {
-    private List<Sale>? ticketSales;
+    [Parameter, EditorRequired] public SalesPoint SalesPoint { get; set; }
+
+    private List<Sale>? productSales;
     private List<(PaymentMethod Method, int Count, decimal Amount)> totals = [];
 
     private static readonly decimal[] Bills = [500m, 200m, 100m, 50m, 20m, 10m, 5m];
@@ -154,8 +155,8 @@ else
     // Hasta mañana a las 00:00 y no hasta "ahora"
     private async Task Load()
     {
-        ticketSales = await SalesService.GetSalesAsync(DateTime.Today, DateTime.Today.AddDays(1), SalesPoint.TicketOffice);
-        totals = PaymentMethods.Totals(ticketSales);
+        productSales = await SalesService.GetSalesAsync(DateTime.Today, DateTime.Today.AddDays(1), SalesPoint);
+        totals = PaymentMethods.Totals(productSales);
     }
 
     private void Reset()

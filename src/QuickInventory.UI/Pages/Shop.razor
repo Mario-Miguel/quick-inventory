@@ -1,23 +1,4 @@
 @page "/shop/sales"
-@inject IInventoryService InventoryService
 
-<div class="d-flex align-center flex-wrap gap-4 mb-4">
-    <h1 class="page-title mb-0">Tienda</h1>
-</div>
 
-@if (products is null)
-{
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
-}
-else
-{
-    
-}
-
-@code {
-    private List<Product>? products;
-
-    protected override async Task OnInitializedAsync() => await Load();
-
-    private async Task Load() => products = await InventoryService.GetProductsAsync(SalesPoint.Shop);
-}
+<SalesPanel SalesPoint="SalesPoint.Shop" Title="Tienda" ShowVisitOptions="false" />

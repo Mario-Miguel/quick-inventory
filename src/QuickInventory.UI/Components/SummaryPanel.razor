@@ -1,0 +1,234 @@
+@inject NavigationManager Navigation
+@inject ISalesService SalesService
+@inject IDialogService Dialogs
+@inject ISnackbar Warnings
+
+
+
+<h1 class="page-title">@Title</h1>
+
+<MudGrid Spacing="6">
+    @* Izquierda: ventas del día. *@
+    <MudItem xs="12" md="8">
+        @* Pulsar una fila la despliega para ver las entradas de esa venta. *@
+        <MudTable T="Sale" Items="productSales" Hover="true" Striped="true" Dense="true" Elevation="1" RowsPerPage="25"
+                  Breakpoint="Breakpoint.Sm" OnRowClick="args => Toggle(args.Item)" RowStyle="cursor:pointer"
+                  RowClassFunc="@((sale, _) => sale.Canceled ? "sale-canceled-row" : "")">
+            <HeaderContent>
+                <MudTh Style="width:40px" />
+                <MudTh>
+                    <MudTableSortLabel T="Sale" SortBy="s => s.Id" InitialDirection="SortDirection.Ascending">ID
+                    </MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel T="Sale" SortBy="s => s.Date">Hora</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel T="Sale" SortBy="s => s.PaymentMethod">Pago</MudTableSortLabel>
+                </MudTh>
+                <MudTh Style="text-align:right">
+                    <MudTableSortLabel T="Sale" SortBy="s => s.Total">Total</MudTableSortLabel>
+                </MudTh>
+
+                @if (ShowVisitOptions)
+                {
+                    <MudTh Style="text-align:center">
+                        <MudTableSortLabel T="Sale" SortBy="s => s.GuidedVisit">Guiada</MudTableSortLabel>
+                    </MudTh>
+                }
+                <MudTh />
+            </HeaderContent>
+
+            <RowTemplate>
+                <MudTd>
+                    <MudIcon
+                    Icon="@(expanded.Contains(context.Id) ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" />
+                </MudTd>
+                <MudTd DataLabel="ID">
+                    <div class="product-name">@context.Id</div>
+                </MudTd>
+                @* Solo se listan las ventas de hoy: basta con la hora. *@
+                <MudTd DataLabel="Hora">@context.Date.ToString("HH:mm")</MudTd>
+                <MudTd DataLabel="Pago">@PaymentMethods.Name(context.PaymentMethod)</MudTd>
+                <MudTd DataLabel="Total" Style="text-align:right;white-space:nowrap">@context.Total.ToString("C")
+                </MudTd>
+                @if (ShowVisitOptions)
+                {
+                    <MudTd DataLabel="Guiada" Style="text-align:center">
+                        @if (context.GuidedVisit)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" aria-label="Visita guiada" />
+                        }
+                    </MudTd>
+                }
+                <MudTd Style="text-align:right">
+                    @* stopPropagation: pulsar los botones no despliega la fila. *@
+                    <div @onclick:stopPropagation="true" style="white-space:nowrap">
+                        <MudTooltip Text="Editar">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                           OnClick="() => Edit(context)" aria-label="Editar" />
+                        </MudTooltip>
+                        <MudTooltip Text="Dar de baja">
+                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error"
+                                           Size="Size.Small" OnClick="() => Unsuscribe(context)" aria-label="Dar de baja" />
+                        </MudTooltip>
+                    </div>
+                </MudTd>
+            </RowTemplate>
+
+            <ChildRowContent>
+                @if (expanded.Contains(context.Id))
+                {
+                    @* tr normal en vez de MudTr: así la fila del detalle no se colorea al pasar el ratón. *@
+                    <tr class="sale-detail-row">
+                        <td colspan="6" class="pa-4">
+                            <MudSimpleTable Dense="true" Outlined="true" Hover="true">
+                                <thead>
+                                    <tr>
+                                        <th>Entrada</th>
+                                        <th style="text-align:right">Cantidad</th>
+                                        <th style="text-align:right">Precio</th>
+                                        <th style="text-align:right">Descuento</th>
+                                        <th style="text-align:right">Precio cobrado</th>
+                                        <th style="text-align:right">Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var line in context.Lines)
+                                    {
+                                        <tr>
+                                            <td>@line.Description</td>
+                                            <td style="text-align:right">@line.Amount</td>
+                                            <td style="text-align:right">@line.BasePrice.ToString("C")</td>
+                                            <td style="text-align:right">
+                                                @if (line.DiscountName is not null)
+                                                {
+                                                    @($"{line.DiscountName}: -{line.DiscountPercent:0.##} %")
+                                                }
+                                            </td>
+                                            <td style="text-align:right">@line.UnitPrice.ToString("C")</td>
+                                            <td style="text-align:right">@line.Subtotal.ToString("C")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                        </td>
+                    </tr>
+                }
+            </ChildRowContent>
+
+            <NoRecordsContent>
+                <MudText Class="pa-4">No hay entradas vendidas.</MudText>
+            </NoRecordsContent>
+
+            <PagerContent>
+                <MudTablePager RowsPerPageString="Filas por página:"
+                               InfoFormat="{first_item}-{last_item} de {all_items}" />
+            </PagerContent>
+        </MudTable>
+    </MudItem>
+
+    @* Derecha: lo cobrado hoy con cada método de pago. Las ventas anuladas no cuentan. *@
+    <MudItem xs="12" md="4">
+        <MudPaper Class="pa-4" Outlined="true">
+            <MudText Typo="Typo.h6" Class="mb-2">Cobrado por método de pago</MudText>
+            @foreach (var (method, count, amount) in TotalsByPaymentMethod)
+            {
+                <div class="d-flex align-center gap-3 py-2">
+                    <MudIcon Icon="@PaymentMethods.Icon(method)" Color="Color.Primary" />
+                    <div class="flex-grow-1">
+                        <MudText Typo="Typo.body1"><b>@PaymentMethods.Name(method)</b></MudText>
+                        <MudText Typo="Typo.body2">@count @(count == 1 ? "venta" : "ventas")</MudText>
+                    </div>
+                    <MudText Typo="Typo.h6">@amount.ToString("C")</MudText>
+                </div>
+                <MudDivider />
+            }
+            <div class="d-flex justify-space-between align-center mt-4">
+                <MudText Typo="Typo.h6">Total</MudText>
+                <MudText Typo="Typo.h5"><b>@TotalsByPaymentMethod.Sum(t => t.Amount).ToString("C")</b></MudText>
+            </div>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+
+@code {
+    [Parameter, EditorRequired] public SalesPoint SalesPoint { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public bool ShowVisitOptions { get; set; } = false;
+    /// <summary>Muestra los interruptores de visita guiada y grupal (solo en taquilla).</summary>
+
+    private List<Sale> productSales = [];
+
+    private IEnumerable<(PaymentMethod Method, int Count, decimal Amount)> TotalsByPaymentMethod =>
+        PaymentMethods.Totals(productSales);
+
+    /// <summary>Ids de las ventas desplegadas.</summary>
+    private readonly HashSet<int> expanded = [];
+
+    private void Toggle(Sale? sale)
+    {
+        // La fila desplegada también es una fila de la tabla, pero sin venta: pulsarla no hace nada.
+        if (sale is null) return;
+        if (!expanded.Remove(sale.Id)) expanded.Add(sale.Id);
+    }
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load() => productSales = await SalesService.GetSalesAsync(DateTime.Today, DateTime.Now, SalesPoint);
+
+    private static readonly DialogOptions CustomDialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+    };
+
+    private Task Edit(Sale s) => OpenEditor(s, "Editar venta");
+
+    private async Task OpenEditor(Sale sale, string titulo)
+    {
+        var parameters = new DialogParameters<TicketSaleEditDialog> { { x => x.Sale, sale } };
+        var dialog = await Dialogs.ShowAsync<TicketSaleEditDialog>(titulo, parameters, CustomDialogOptions);
+        var result = await dialog.Result;
+        if (result is not { Canceled: false, Data: PaymentMethod paymentMethod }) return;
+
+        await Execute(
+            () => SalesService.ChangePaymentMethodAsync(sale.Id, paymentMethod),
+            $"Venta {sale.Id}: método de pago cambiado a {PaymentMethods.Name(paymentMethod)}.");
+    }
+
+    private async Task Unsuscribe(Sale sale)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Dar de baja",
+            $"¿Seguro que quieres dar de baja «{sale.Id}»? Dejará de aparecer en el inventario, pero se conserva su historial.",
+            yesText: "Dar de baja",
+            cancelText: "Cancelar");
+
+        if (confirmed != true) return;
+
+        await Execute(
+            () => SalesService.CancelSaleAsync(sale.Id),
+            $"«{sale.Id}» dado de baja.");
+    }
+
+    private async Task Execute(Func<Task> operation, string succeedMessage)
+    {
+        try
+        {
+            await operation();
+            Warnings.Add(succeedMessage, Severity.Success);
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el cambio. Inténtalo de nuevo.", Severity.Error);
+        }
+
+        await Load();
+    }
+}

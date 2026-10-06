@@ -15,12 +15,15 @@ public static class Modules
     public static readonly Module[] All =
     [
         new("Ventas", "Cobrar entradas", Icons.Material.Filled.ConfirmationNumber, "/tickets/sales", TicketOfficeOnly),
-        new("Ventas", "Cobrar artículos de la tienda", Icons.Material.Filled.PointOfSale, "/shop/sales", ShopOnly),
+        new("Ventas", "Cobrar artículos de la tienda", Icons.Material.Filled.ShoppingCart, "/shop/sales", ShopOnly),
         new("Cerrar caja", "Comprobación de la caja", Icons.Material.Filled.PointOfSale, "/tickets/close", TicketOfficeOnly),
-        new("Estadísticas", "Ver estadísticas la taquilla", Icons.Material.Filled.PointOfSale, "/tickets/summary", TicketOfficeOnly),
+        new("Cerrar caja", "Comprobación de la caja", Icons.Material.Filled.PointOfSale, "/shop/close", ShopOnly),
+        new("Resumen de ventas", "Ver ventas de la taquilla", Icons.Material.Filled.ListAlt, "/tickets/summary", TicketOfficeOnly),
+        new("Resumen de ventas", "Ver ventas de la tienda", Icons.Material.Filled.ListAlt, "/shop/summary", ShopOnly),
         new("Inventario", "Productos, precios y unidades en almacén", Icons.Material.Filled.Inventory2, "/inventory", AdminOnly),
-        new("Ingresos", "Subvenciones, visitas concertadas y otros cobros", Icons.Material.Filled.TrendingUp, "/incomes", AdminOnly),
-        new("Pagos", "Proveedores, facturas y otros gastos", Icons.Material.Filled.Payments, "/payments", AdminOnly),
+        new("Exportar datos", "Exportar datos de las ventas del mes", Icons.Material.Filled.Download, "/export", AdminOnly),
+        // new("Ingresos", "Subvenciones, visitas concertadas y otros cobros", Icons.Material.Filled.TrendingUp, "/incomes", AdminOnly),
+        // new("Pagos", "Proveedores, facturas y otros gastos", Icons.Material.Filled.Payments, "/payments", AdminOnly),
     ];
 
     public static IEnumerable<Module> For(SalesPoint profile) => All.Where(m => m.Profiles.Contains(profile));
