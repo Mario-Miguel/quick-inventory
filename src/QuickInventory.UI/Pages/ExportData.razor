@@ -1,5 +1,174 @@
 @page "/export"
+@inject ISalesService SalesService
+@inject IFileSaver FileSaver
+@inject ISnackbar Warnings
 
-<div>
-    tabla con exportaciones
+<h1 class="page-title">Exportar ventas</h1>
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    @* Selector de mes: flechas grandes en vez de un calendario. *@
+    <div class="d-flex align-center gap-2">
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Variant="Variant.Outlined" Size="Size.Large"
+                       OnClick="() => ChangeMonth(-1)" aria-label="Mes anterior" />
+        <MudText Typo="Typo.h6" Class="export-month">@month.ToString("MMMM 'de' yyyy")</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Variant="Variant.Outlined" Size="Size.Large"
+                       OnClick="() => ChangeMonth(1)" Disabled="@IsCurrentMonth" aria-label="Mes siguiente" />
+    </div>
+
+    <MudTextField T="string"
+                  @bind-Value="searching"
+                  Placeholder="Buscar por número, producto, método de pago o punto de venta"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Variant="Variant.Outlined"
+                  Immediate="true"
+                  Clearable="true"
+                  Class="finder" />
 </div>
+
+@if (sales is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    @* Al cargar el mes se marcan todas las ventas menos las anuladas. Quitar la marca deja la fila fuera del archivo. *@
+    <MudTable T="Sale" Items="Filtered" MultiSelection="true" @bind-SelectedItems="selected" SelectOnRowClick="true"
+              Hover="true" Striped="true" Dense="true" Elevation="1" RowsPerPage="50" Breakpoint="Breakpoint.Sm"
+              RowStyle="cursor:pointer"
+              RowClassFunc="@((sale, _) => sale.Canceled ? "sale-canceled-row" : "")">
+        <HeaderContent>
+            <MudTh><MudTableSortLabel T="Sale" SortBy="s => s.Id">ID</MudTableSortLabel></MudTh>
+            <MudTh>
+                <MudTableSortLabel T="Sale" SortBy="s => s.Date" InitialDirection="SortDirection.Ascending">Fecha</MudTableSortLabel>
+            </MudTh>
+            <MudTh><MudTableSortLabel T="Sale" SortBy="s => s.SalesPoint">Punto de venta</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel T="Sale" SortBy="s => s.PaymentMethod">Pago</MudTableSortLabel></MudTh>
+            <MudTh>Productos</MudTh>
+            <MudTh Style="text-align:right">
+                <MudTableSortLabel T="Sale" SortBy="s => s.Total">Total</MudTableSortLabel>
+            </MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="ID"><span class="product-name">@context.Id</span></MudTd>
+            <MudTd DataLabel="Fecha" Style="white-space:nowrap">@context.Date.ToString("dd/MM/yyyy HH:mm")</MudTd>
+            <MudTd DataLabel="Punto de venta">@ActiveProfile.Name(context.SalesPoint)</MudTd>
+            <MudTd DataLabel="Pago">@PaymentMethods.Name(context.PaymentMethod)</MudTd>
+            <MudTd DataLabel="Productos">
+                @SalesExport.Products(context)
+                @if (context.Canceled)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-2">Anulada</MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Total" Style="text-align:right;white-space:nowrap">@context.Total.ToString("C")</MudTd>
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <MudText Class="pa-4">
+                @(sales.Count == 0 ? "No hay ventas en este mes." : "Ninguna venta coincide con la búsqueda.")
+            </MudText>
+        </NoRecordsContent>
+
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Filas por página:"
+                           InfoFormat="{first_item}-{last_item} de {all_items}" />
+        </PagerContent>
+    </MudTable>
+
+    <MudPaper Class="pa-4 mt-4 d-flex align-center flex-wrap gap-4" Outlined="true">
+        <div class="flex-grow-1">
+            <MudText Typo="Typo.h6">@ToExport.Count de @Filtered.Count() ventas seleccionadas</MudText>
+            <MudText Typo="Typo.body2">
+                Total sin anuladas: <b>@ToExport.Where(s => !s.Canceled).Sum(s => s.Total).ToString("C")</b>
+            </MudText>
+        </div>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+                   StartIcon="@Icons.Material.Filled.Description" Disabled="@(ToExport.Count == 0 || saving)"
+                   OnClick="ExportCsv">
+            Exportar CSV
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                   StartIcon="@Icons.Material.Filled.TableView" Disabled="@(ToExport.Count == 0 || saving)"
+                   OnClick="ExportExcel">
+            Exportar Excel
+        </MudButton>
+    </MudPaper>
+}
+
+@code {
+    /// <summary>Primer día del mes que se está viendo.</summary>
+    private DateTime month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+
+    private List<Sale>? sales;
+    private HashSet<Sale> selected = [];
+    private string? searching;
+    private bool saving;
+
+    private bool IsCurrentMonth => month.AddMonths(1) > DateTime.Today;
+
+    private IEnumerable<Sale> Filtered =>
+        string.IsNullOrWhiteSpace(searching)
+            ? sales ?? []
+            : (sales ?? []).Where(s => Matches(s, searching.Trim()));
+
+    /// <summary>
+    /// Ventas que irán al archivo: las marcadas que se ven con la búsqueda actual,
+    /// para que lo exportado sea siempre lo que hay en pantalla.
+    /// </summary>
+    private List<Sale> ToExport => Filtered.Where(selected.Contains).OrderBy(s => s.Date).ToList();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task ChangeMonth(int months)
+    {
+        month = month.AddMonths(months);
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        sales = null;
+        sales = await SalesService.GetSalesAsync(month, month.AddMonths(1));
+        selected = sales.Where(s => !s.Canceled).ToHashSet();
+    }
+
+    private static bool Matches(Sale sale, string text) =>
+        Contains(sale.Id.ToString(), text)
+        || Contains(SalesExport.Products(sale), text)
+        || Contains(PaymentMethods.Name(sale.PaymentMethod), text)
+        || Contains(ActiveProfile.Name(sale.SalesPoint), text)
+        || Contains(sale.Date.ToString("dd/MM/yyyy"), text);
+
+    private static bool Contains(string origin, string text) =>
+        CultureInfo.CurrentCulture.CompareInfo.IndexOf(
+            origin, text, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0;
+
+    private Task ExportCsv() => Export(SalesExport.ToCsv(ToExport), "csv");
+
+    private Task ExportExcel() => Export(SalesExport.ToExcel(ToExport), "xlsx");
+
+    private async Task Export(byte[] content, string extension)
+    {
+        saving = true;
+        try
+        {
+            var name = $"Ventas {month:yyyy-MM}.{extension}";
+            if (await FileSaver.SaveAsync(name, content))
+                Warnings.Add($"Archivo guardado: {name}", Severity.Success);
+        }
+        catch (IOException)
+        {
+            Warnings.Add("No se ha podido guardar el archivo. Si lo tienes abierto en Excel, ciérralo e inténtalo de nuevo.", Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el archivo. Inténtalo de nuevo.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

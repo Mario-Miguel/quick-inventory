@@ -63,6 +63,9 @@ public partial class App : Application
         // Perfil activo (Taquilla / Tienda): uno por ventana.
         services.AddScoped<ActiveProfile>();
 
+        // Diálogo "Guardar como" de Windows para los archivos exportados.
+        services.AddSingleton<IFileSaver, DesktopFileSaver>();
+
         return services.BuildServiceProvider();
     }
 
