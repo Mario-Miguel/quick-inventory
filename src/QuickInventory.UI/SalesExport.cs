@@ -6,9 +6,9 @@ using QuickInventory.Core.Models;
 namespace QuickInventory.UI;
 
 /// <summary>
-/// Convierte una lista de ventas en un archivo CSV o Excel, con una fila por venta.
-/// En el Excel, la taquilla y la tienda van en hojas separadas; en el CSV, que solo
-/// tiene una tabla, van agrupadas y se distinguen por la columna "Punto de venta".
+/// Convierte una lista de ventas en un archivo CSV o Excel. En el CSV hay una fila por
+/// venta y la taquilla y la tienda se distinguen por la columna "Punto de venta". En el
+/// Excel van en hojas separadas, y cada venta lleva debajo el detalle de sus productos.
 /// </summary>
 public static class SalesExport
 {
@@ -53,6 +53,7 @@ public static class SalesExport
     public static byte[] ToExcel(IEnumerable<Sale> sales)
     {
         using var book = new XLWorkbook();
+        AddSheet(book, null, [.. sales]);
 
         // Taquilla y Tienda salen siempre, aunque no tengan ventas, para que el libro tenga
         // siempre la misma forma. Admin no vende: solo sale si por algún motivo tiene ventas.
@@ -68,29 +69,47 @@ public static class SalesExport
         return stream.ToArray();
     }
 
-    /// <summary>Columna de una hoja de Excel: título y cómo sacar el valor de cada venta.</summary>
-    private sealed record ExcelColumn(string Header, Func<Sale, XLCellValue> Value, string? Format = null);
+    /// <summary>
+    /// Columna de una hoja de Excel: título y cómo sacar el valor de la fila de la venta y
+    /// de las filas de sus productos. Si una de las dos es null, esa celda se queda vacía.
+    /// </summary>
+    private sealed record ExcelColumn(
+        string Header,
+        Func<Sale, XLCellValue>? SaleValue,
+        Func<Sale, SalesLine, XLCellValue>? LineValue,
+        string? Format = null);
 
-    private static void AddSheet(XLWorkbook book, SalesPoint salesPoint, List<Sale> sales)
+    private const string EurosFormat = "#,##0.00 €";
+
+    private static void AddSheet(XLWorkbook book, SalesPoint? salesPoint, List<Sale> sales)
     {
-        var sheet = book.Worksheets.Add(ActiveProfile.Name(salesPoint));
+        var sheet = book.Worksheets.Add(salesPoint!=null?ActiveProfile.Name((SalesPoint)salesPoint) :"Total");
 
-        // Las visitas guiadas y grupales solo tienen sentido en la taquilla.
+        // Cada venta ocupa una fila con sus datos y su total, y debajo una fila por producto
+        // con el detalle del precio y del descuento. Las visitas guiadas y grupales solo
+        // tienen sentido en la taquilla.
         List<ExcelColumn> columns =
         [
-            new("ID", s => s.Id),
-            new("Fecha", s => s.Date.Date, "dd/mm/yyyy"),
-            new("Hora", s => s.Date.ToString("HH:mm")),
-            new("Método de pago", s => PaymentMethods.Name(s.PaymentMethod)),
-            new("Productos", s => Products(s)),
+            new("ID", s => s.Id, null),
+            new("Fecha", s => s.Date.Date, null, "dd/mm/yyyy"),
+            new("Hora", s => s.Date.ToString("HH:mm"), null),
+            new("Método de pago", s => PaymentMethods.Name(s.PaymentMethod), null),
         ];
         if (salesPoint == SalesPoint.TicketOffice)
         {
-            columns.Add(new("Visita guiada", s => YesNo(s.GuidedVisit)));
-            columns.Add(new("Visita grupal", s => YesNo(s.GroupVisit)));
+            columns.Add(new("Visita guiada", s => YesNo(s.GuidedVisit), null));
+            columns.Add(new("Visita grupal", s => YesNo(s.GroupVisit), null));
         }
-        columns.Add(new("Anulada", s => YesNo(s.Canceled)));
-        columns.Add(new("Total", s => s.Total, "#,##0.00 €"));
+        columns.AddRange(
+        [
+            new("Anulada", s => YesNo(s.Canceled), null),
+            new("Producto", s => Products(s), (_, l) => l.Description),
+            new("Cantidad", s => s.Lines.Sum(l => l.Amount), (_, l) => l.Amount),
+            new("Precio", s => s.Lines.Sum(l => l.Amount * l.BasePrice), (_, l) => l.BasePrice, EurosFormat),
+            new("Descuento", s => Discounts(s), (s, l) => Discount(s, l)),
+            new("Descontado", s => s.Lines.Sum(l => l.DiscountTotal), (_, l) => l.DiscountTotal, EurosFormat),
+            new("Total", s => s.Total, (_, l) => l.Subtotal, EurosFormat),
+        ]);
 
         for (var column = 0; column < columns.Count; column++)
             sheet.Cell(1, column + 1).Value = columns[column].Header;
@@ -98,29 +117,72 @@ public static class SalesExport
         var row = 2;
         foreach (var sale in sales)
         {
+            var saleRow = sheet.Row(row);
             for (var column = 0; column < columns.Count; column++)
-                sheet.Cell(row, column + 1).Value = columns[column].Value(sale);
+                if (columns[column].SaleValue is { } value)
+                    sheet.Cell(row, column + 1).Value = value(sale);
+            saleRow.Style.Font.Bold = true;
+            saleRow.Style.Fill.BackgroundColor = XLColor.FromHtml("#EEF2F7");
             row++;
+
+            var firstLineRow = row;
+            foreach (var line in sale.Lines)
+            {
+                for (var column = 0; column < columns.Count; column++)
+                    if (columns[column].LineValue is { } value)
+                        sheet.Cell(row, column + 1).Value = value(sale, line);
+                row++;
+            }
+
+            // Los productos se agrupan bajo su venta, para poder plegarlos desde Excel.
+            if (row > firstLineRow)
+                sheet.Rows(firstLineRow, row - 1).Group();
+
+            if (sale.Canceled)
+                sheet.Rows(saleRow.RowNumber(), row - 1).Style.Font.FontColor = XLColor.Gray;
         }
 
         // Total de las ventas exportadas de este punto de venta, sin contar las anuladas.
-        var totalColumn = columns.Count;
-        sheet.Cell(row, totalColumn - 1).Value = "Total";
-        sheet.Cell(row, totalColumn).Value = sales.Where(s => !s.Canceled).Sum(s => s.Total);
+        
+        var cancelledColumn = columns.FindIndex(c => c.Header == "Anulada") + 1;
+        var totalColumn = sheet.Column(columns.Count).ColumnLetter();
+        var canceled = sheet.Column(cancelledColumn).ColumnLetter();
+
+
+        sheet.Cell(row, columns.Count - 1).Value = "Total";
+        sheet.Cell(row, totalColumn).FormulaA1 = $"SUMIFS({totalColumn}2:{totalColumn}{row-1},{canceled}2:{canceled}{row-1},\"{YesNo(false)}\")";
         sheet.Row(row).Style.Font.Bold = true;
 
         for (var column = 0; column < columns.Count; column++)
             if (columns[column].Format is { } format)
                 sheet.Column(column + 1).Style.NumberFormat.Format = format;
 
+        sheet.Outline.SummaryVLocation = XLOutlineSummaryVLocation.Top;
         sheet.Row(1).Style.Font.Bold = true;
         sheet.SheetView.FreezeRows(1);
         sheet.Columns().AdjustToContents();
     }
 
+    /// <summary>
+    /// Descuentos aplicados a una línea, por ejemplo "RGCC/CNSO (-30 %) + Visita grupal (-0,50 €)".
+    /// Vacío si se cobró sin descuento.
+    /// </summary>
+    private static string Discount(Sale sale, SalesLine line)
+    {
+        List<string> discounts = [];
+        if (line.DiscountName is not null)
+            discounts.Add($"{line.DiscountName} (-{line.DiscountPercent:0.##} %)");
+        if (sale.GroupVisit)
+            discounts.Add($"Visita grupal (-{Sale.GroupVisitDiscount:C})");
+        return string.Join(" + ", discounts);
+    }
+
     /// <summary>Resumen de lo vendido, por ejemplo "2 x Entrada general, 1 x Sidra".</summary>
     public static string Products(Sale sale) =>
         string.Join(", ", sale.Lines.Select(l => $"{l.Amount} x {l.Description}"));
+    
+    public static string Discounts(Sale sale) => 
+    string.Join(" + ", sale.Lines.Select(l=>Discount(sale, l)).Where(d => d!="").Distinct());
 
     private static string YesNo(bool value) => value ? "Sí" : "No";
 
