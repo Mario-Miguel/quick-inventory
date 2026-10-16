@@ -65,6 +65,8 @@ public partial class App : Application
 
         // Diálogo "Guardar como" de Windows para los archivos exportados.
         services.AddSingleton<IFileSaver, DesktopFileSaver>();
+        // Diálogo "Abrir" de Windows para adjuntar archivos (facturas).
+        services.AddSingleton<IFilePicker, DesktopFilePicker>();
 
         return services.BuildServiceProvider();
     }

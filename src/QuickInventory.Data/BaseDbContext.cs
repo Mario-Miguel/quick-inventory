@@ -11,6 +11,7 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SalesLine> SaleLines => Set<SalesLine>();
     public DbSet<CashMovement> CashMovements => Set<CashMovement>();
+    public DbSet<InvoiceFile> InvoiceFiles => Set<InvoiceFile>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configuration)
     {
@@ -58,7 +59,18 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
         model.Entity<CashMovement>(e =>
         {
             e.Property(m => m.Description).HasMaxLength(300).IsRequired();
+            e.Property(m => m.Person).HasMaxLength(200);
+            e.Property(m => m.InvoiceNumber).HasMaxLength(100);
+            e.Property(m => m.InvoiceFileName).HasMaxLength(260);
             e.HasIndex(m => m.Date);
+        });
+
+        // Como mucho una factura por movimiento.
+        model.Entity<InvoiceFile>(e =>
+        {
+            e.Property(f => f.FileName).HasMaxLength(260).IsRequired();
+            e.Property(f => f.ContentType).HasMaxLength(100);
+            e.HasOne<CashMovement>().WithOne().HasForeignKey<InvoiceFile>(f => f.CashMovementId);
         });
     }
 }

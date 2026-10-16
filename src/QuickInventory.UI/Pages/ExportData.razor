@@ -1,5 +1,6 @@
 @page "/export"
 @inject ISalesService SalesService
+@inject IRefundService RefundService
 @inject IFileSaver FileSaver
 @inject ISnackbar Warnings
 
@@ -83,6 +84,12 @@ else
             <MudText Typo="Typo.body2">
                 Total sin anuladas: <b>@ToExport.Where(s => !s.Canceled).Sum(s => s.Total).ToString("C")</b>
             </MudText>
+            @* Los reembolsos no se eligen uno a uno: van todos los del mes en su propia hoja del Excel. *@
+            <MudText Typo="Typo.body2">
+                Reembolsos del mes (solo en Excel): @ValidRefunds.Count() ·
+                <b>@ValidRefunds.Sum(r => r.Amount).ToString("C")</b>
+                · @refunds.Count(r => r.InvoiceFileName is not null) con factura adjunta
+            </MudText>
         </div>
         <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
                    StartIcon="@Icons.Material.Filled.Description" Disabled="@(ToExport.Count == 0 || saving)"
@@ -90,9 +97,15 @@ else
             Exportar CSV
         </MudButton>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
-                   StartIcon="@Icons.Material.Filled.TableView" Disabled="@(ToExport.Count == 0 || saving)"
+                   StartIcon="@Icons.Material.Filled.TableView" Disabled="@((ToExport.Count == 0 && refunds.Count == 0) || saving)"
                    OnClick="ExportExcel">
             Exportar Excel
+        </MudButton>
+        @* Un ZIP con el Excel y una carpeta con las facturas; en el Excel cada factura es un enlace. *@
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                   StartIcon="@Icons.Material.Filled.FolderZip" Disabled="@((ToExport.Count == 0 && refunds.Count == 0) || saving)"
+                   OnClick="ExportExcelWithInvoices">
+            Exportar Excel con facturas
         </MudButton>
     </MudPaper>
 }
@@ -102,9 +115,12 @@ else
     private DateTime month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
 
     private List<Sale>? sales;
+    private List<CashMovement> refunds = [];
     private HashSet<Sale> selected = [];
     private string? searching;
     private bool saving;
+
+    private IEnumerable<CashMovement> ValidRefunds => refunds.Where(r => !r.Canceled);
 
     private bool IsCurrentMonth => month.AddMonths(1) > DateTime.Today;
 
@@ -131,6 +147,7 @@ else
     {
         sales = null;
         sales = await SalesService.GetSalesAsync(month, month.AddMonths(1));
+        refunds = await RefundService.GetRefundsAsync(month, month.AddMonths(1));
         selected = sales.Where(s => !s.Canceled).ToHashSet();
     }
 
@@ -147,15 +164,27 @@ else
 
     private Task ExportCsv() => Export(SalesExport.ToCsv(ToExport), "csv");
 
-    private Task ExportExcel() => Export(SalesExport.ToExcel(ToExport), "xlsx");
+    private Task ExportExcel() => Export(SalesExport.ToExcel(ToExport, refunds), "xlsx");
 
-    private async Task Export(byte[] content, string extension)
+    private Task ExportExcelWithInvoices() => Export(async () =>
+    {
+        var withInvoice = refunds.Where(r => r.InvoiceFileName is not null).Select(r => r.Id).ToList();
+        var invoices = await RefundService.GetInvoicesAsync(withInvoice);
+        return SalesExport.ToZipWithInvoices(ToExport, refunds, invoices, $"{FileName}.xlsx");
+    }, "zip");
+
+    /// <summary>Nombre de los archivos exportados, sin extensión.</summary>
+    private string FileName => $"Ventas {month:yyyy-MM}";
+
+    private Task Export(byte[] content, string extension) => Export(() => Task.FromResult(content), extension);
+
+    private async Task Export(Func<Task<byte[]>> content, string extension)
     {
         saving = true;
         try
         {
-            var name = $"Ventas {month:yyyy-MM}.{extension}";
-            if (await FileSaver.SaveAsync(name, content))
+            var name = $"{FileName}.{extension}";
+            if (await FileSaver.SaveAsync(name, await content()))
                 Warnings.Add($"Archivo guardado: {name}", Severity.Success);
         }
         catch (IOException)

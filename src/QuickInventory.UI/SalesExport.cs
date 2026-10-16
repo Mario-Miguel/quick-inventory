@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Text;
 using ClosedXML.Excel;
 using QuickInventory.Core.Models;
@@ -9,6 +10,8 @@ namespace QuickInventory.UI;
 /// Convierte una lista de ventas en un archivo CSV o Excel. En el CSV hay una fila por
 /// venta y la taquilla y la tienda se distinguen por la columna "Punto de venta". En el
 /// Excel van en hojas separadas, y cada venta lleva debajo el detalle de sus productos.
+/// El Excel lleva además una hoja con los reembolsos, y se puede exportar dentro de un ZIP
+/// junto con sus facturas.
 /// </summary>
 public static class SalesExport
 {
@@ -48,9 +51,14 @@ public static class SalesExport
 
     /// <summary>
     /// Libro de Excel con una hoja por punto de venta ("Taquilla" y "Tienda"), para llevar
-    /// las cuentas por separado. Cada hoja acaba con una fila con su total.
+    /// las cuentas por separado, y otra con los reembolsos. Cada hoja acaba con una fila con su total.
     /// </summary>
-    public static byte[] ToExcel(IEnumerable<Sale> sales)
+    /// <param name="invoicePaths">
+    /// Ruta relativa al Excel de la factura de cada reembolso (por su Id). Si se pasa, la
+    /// columna "Factura adjunta" lleva un enlace al archivo; si no, solo dice si tiene.
+    /// </param>
+    public static byte[] ToExcel(IEnumerable<Sale> sales, IEnumerable<CashMovement> refunds,
+        IReadOnlyDictionary<int, string>? invoicePaths = null)
     {
         using var book = new XLWorkbook();
         AddSheet(book, null, [.. sales]);
@@ -63,6 +71,8 @@ public static class SalesExport
             if (salesPoint == SalesPoint.Admin && ofSalesPoint.Count == 0) continue;
             AddSheet(book, salesPoint, ofSalesPoint);
         }
+
+        AddRefundsSheet(book, [.. refunds], invoicePaths);
 
         using var stream = new MemoryStream();
         book.SaveAs(stream);
@@ -164,6 +174,94 @@ public static class SalesExport
     }
 
     /// <summary>
+    /// ZIP con el Excel (<paramref name="excelName"/>) y una carpeta "Facturas" con las
+    /// facturas de los reembolsos. En el Excel cada factura es un enlace relativo, así que
+    /// funciona en cualquier ordenador una vez descomprimido el ZIP.
+    /// </summary>
+    public static byte[] ToZipWithInvoices(IEnumerable<Sale> sales, IEnumerable<CashMovement> refunds,
+        IEnumerable<InvoiceFile> invoices, string excelName)
+    {
+        // Nombres sin espacios ni tildes ("Facturas/Reembolso-12.pdf") para que el enlace
+        // funcione igual en todos los Excel. El nombre original sigue saliendo en la celda.
+        var invoiceList = invoices.ToList();
+        var paths = invoiceList.ToDictionary(f => f.CashMovementId, f => $"Facturas/Reembolso-{f.CashMovementId}{f.Extension}");
+
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
+        {
+            AddEntry(zip, excelName, ToExcel(sales, refunds, paths));
+            foreach (var invoice in invoiceList)
+                AddEntry(zip, paths[invoice.CashMovementId], invoice.Content);
+        }
+        return stream.ToArray();
+    }
+
+    private static void AddEntry(ZipArchive zip, string name, byte[] content)
+    {
+        using var entry = zip.CreateEntry(name).Open();
+        entry.Write(content);
+    }
+
+    /// <summary>
+    /// Hoja con un reembolso por fila. Sale siempre, aunque no haya reembolsos, para que el
+    /// libro tenga siempre la misma forma. El total no cuenta los anulados.
+    /// </summary>
+    private static void AddRefundsSheet(XLWorkbook book, List<CashMovement> refunds, IReadOnlyDictionary<int, string>? invoicePaths)
+    {
+        var sheet = book.Worksheets.Add("Reembolsos");
+
+        string[] headers =
+            ["ID", "Fecha", "Hora", "Pagado desde", "Persona", "Concepto", "Nº factura", "Factura adjunta", "Notas", "Anulado", "Importe"];
+        for (var column = 0; column < headers.Length; column++)
+            sheet.Cell(1, column + 1).Value = headers[column];
+
+        var row = 2;
+        foreach (var refund in refunds.OrderBy(r => r.Date))
+        {
+            XLCellValue[] values =
+            [
+                refund.Id,
+                refund.Date.Date,
+                refund.Date.ToString("HH:mm"),
+                RefundOrigin(refund),
+                refund.Person ?? "",
+                refund.Description,
+                refund.InvoiceNumber ?? "",
+                refund.InvoiceFileName ?? "No",
+                refund.Notes ?? "",
+                YesNo(refund.Canceled),
+                refund.Amount,
+            ];
+            for (var column = 0; column < values.Length; column++)
+                sheet.Cell(row, column + 1).Value = values[column];
+
+            if (invoicePaths is not null && invoicePaths.TryGetValue(refund.Id, out var path))
+            {
+                var link = sheet.Cell(row, Array.IndexOf(headers, "Factura adjunta") + 1);
+                link.SetHyperlink(new XLHyperlink(new Uri(path, UriKind.Relative)));
+                link.Style.Font.FontColor = XLColor.Blue;
+                link.Style.Font.Underline = XLFontUnderlineValues.Single;
+            }
+
+            if (refund.Canceled)
+                sheet.Row(row).Style.Font.FontColor = XLColor.Gray;
+            row++;
+        }
+
+        var amount = sheet.Column(headers.Length).ColumnLetter();
+        var canceled = sheet.Column(Array.IndexOf(headers, "Anulado") + 1).ColumnLetter();
+        sheet.Cell(row, headers.Length - 1).Value = "Total";
+        sheet.Cell(row, amount).FormulaA1 = $"SUMIFS({amount}2:{amount}{row - 1},{canceled}2:{canceled}{row - 1},\"{YesNo(false)}\")";
+        sheet.Row(row).Style.Font.Bold = true;
+
+        sheet.Column(2).Style.NumberFormat.Format = "dd/mm/yyyy";
+        sheet.Column(headers.Length).Style.NumberFormat.Format = EurosFormat;
+        sheet.Row(1).Style.Font.Bold = true;
+        sheet.SheetView.FreezeRows(1);
+        sheet.Columns().AdjustToContents();
+    }
+
+    /// <summary>
     /// Descuentos aplicados a una línea, por ejemplo "RGCC/CNSO (-30 %) + Visita grupal (-0,50 €)".
     /// Vacío si se cobró sin descuento.
     /// </summary>
@@ -176,6 +274,12 @@ public static class SalesExport
             discounts.Add($"Visita grupal (-{Sale.GroupVisitDiscount:C})");
         return string.Join(" + ", discounts);
     }
+
+    /// <summary>De dónde sale el dinero de un reembolso: "Caja de Taquilla", "Caja de Tienda" o "Transferencia".</summary>
+    public static string RefundOrigin(CashMovement refund) =>
+        refund.SalesPoint is { } salesPoint
+            ? $"Caja de {ActiveProfile.Name(salesPoint)}"
+            : PaymentMethods.Name(refund.PaymentMethod);
 
     /// <summary>Resumen de lo vendido, por ejemplo "2 x Entrada general, 1 x Sidra".</summary>
     public static string Products(Sale sale) =>

@@ -1,0 +1,161 @@
+@inject ISnackbar Warnings
+@inject IFilePicker FilePicker
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudStack Spacing="3">
+                <MudTextField T="string"
+                              @bind-Value="Refund.Person"
+                              Label="¿A quién se le devuelve el dinero?"
+                              Required="true"
+                              RequiredError="Escribe el nombre de la persona"
+                              AutoFocus="true"
+                              Variant="Variant.Outlined" />
+
+                <MudTextField T="string"
+                              @bind-Value="Refund.Description"
+                              Label="¿Qué se compró?"
+                              Required="true"
+                              RequiredError="Escribe qué se compró"
+                              Variant="Variant.Outlined" />
+
+                <div class="d-flex gap-4">
+                    <MudNumericField T="decimal"
+                                     @bind-Value="Refund.Amount"
+                                     Label="Importe de la factura"
+                                     Min="0m"
+                                     Format="N2"
+                                     Adornment="Adornment.End"
+                                     AdornmentText="€"
+                                     HideSpinButtons="true"
+                                     Validation="@(new Func<decimal, string?>(a => a > 0 ? null : "El importe tiene que ser mayor que 0"))"
+                                     Variant="Variant.Outlined" />
+                    <MudTextField T="string"
+                                  @bind-Value="Refund.InvoiceNumber"
+                                  Label="Nº de factura (opcional)"
+                                  Variant="Variant.Outlined" />
+                </div>
+
+                <div>
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">¿De dónde sale el dinero?</MudText>
+                    @* Botones grandes en vez de un desplegable; el elegido va relleno. *@
+                    <MudGrid Spacing="2">
+                        @foreach (var origin in Origins)
+                        {
+                            <MudItem xs="12" sm="4">
+                                <MudButton Variant="@(IsSelected(origin) ? Variant.Filled : Variant.Outlined)"
+                                           Color="Color.Primary" FullWidth="true" StartIcon="@origin.Icon"
+                                           OnClick="() => Select(origin)">
+                                    @origin.Name
+                                </MudButton>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                    @if (Refund.SalesPoint is { } salesPoint)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-2">
+                            Se pagará en efectivo y se restará al cerrar la caja de @ActiveProfile.Name(salesPoint).
+                        </MudText>
+                    }
+                    else if (triedToSave && !originChosen)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Error" Class="mt-2">Elige de dónde sale el dinero.</MudText>
+                    }
+                </div>
+
+                @* La factura es opcional: si aún no la tienen, se puede adjuntar después desde la lista. *@
+                <div>
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Factura escaneada o foto (opcional)</MudText>
+                    @if (invoice is null)
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AttachFile"
+                                   OnClick="Attach">
+                            Adjuntar factura
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Icon="@Icons.Material.Filled.AttachFile" Color="Color.Primary" Variant="Variant.Outlined"
+                                 OnClose="() => invoice = null">
+                            @invoice.FileName
+                        </MudChip>
+                    }
+                </div>
+
+                <MudTextField T="string"
+                              @bind-Value="Refund.Notes"
+                              Label="Notas (opcional)"
+                              Lines="2"
+                              Variant="Variant.Outlined" />
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Size="Size.Large" OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary" OnClick="Save">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter] public CashMovement Refund { get; set; } = new();
+
+    /// <summary>Lo que devuelve el diálogo al guardar: el reembolso y, si se ha adjuntado, la factura.</summary>
+    public sealed record Result(CashMovement Refund, InvoiceFile? Invoice);
+
+    private InvoiceFile? invoice;
+
+    private async Task Attach()
+    {
+        try
+        {
+            invoice = await InvoiceUploads.PickAsync(FilePicker) ?? invoice;
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido leer el archivo. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    /// <summary>Opciones para pagar el reembolso: en efectivo de una caja o por transferencia (sin caja).</summary>
+    private sealed record Origin(string Name, string Icon, SalesPoint? SalesPoint, PaymentMethod PaymentMethod);
+
+    private static readonly Origin[] Origins =
+    [
+        new("Caja de Taquilla", ActiveProfile.Icon(SalesPoint.TicketOffice), SalesPoint.TicketOffice, PaymentMethod.Cash),
+        new("Caja de Tienda", ActiveProfile.Icon(SalesPoint.Shop), SalesPoint.Shop, PaymentMethod.Cash),
+        new("Transferencia", PaymentMethods.Icon(PaymentMethod.BankTransfer), null, PaymentMethod.BankTransfer),
+    ];
+
+    /// <summary>No se propone ninguna opción: hay que elegirla para que no se reste de una caja por descuido.</summary>
+    private bool originChosen;
+    private bool triedToSave;
+
+    private bool IsSelected(Origin origin) =>
+        originChosen && origin.SalesPoint == Refund.SalesPoint && origin.PaymentMethod == Refund.PaymentMethod;
+
+    private void Select(Origin origin)
+    {
+        originChosen = true;
+        Refund.SalesPoint = origin.SalesPoint;
+        Refund.PaymentMethod = origin.PaymentMethod;
+    }
+
+    private MudForm form = default!;
+
+    private async Task Save()
+    {
+        triedToSave = true;
+        await form.ValidateAsync();
+        if (!form.IsValid || !originChosen) return;
+        Dialog.Close(DialogResult.Ok(new Result(Refund, invoice)));
+    }
+
+    private void Cancel() => Dialog.Cancel();
+}

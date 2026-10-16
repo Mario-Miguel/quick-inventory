@@ -1,10 +1,11 @@
 @inject ISalesService SalesService
+@inject IRefundService RefundService
 
 <div class="d-flex align-center flex-wrap gap-4 mb-4">
     <h1 class="page-title mb-0">Cerrar caja</h1>
     <MudSpacer />
     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="Load">
-        Actualizar ventas
+        Actualizar ventas y reembolsos
     </MudButton>
     <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.RestartAlt" OnClick="Reset">
         Empezar el recuento de nuevo
@@ -80,6 +81,18 @@ else
                     <MudText>+ Vendido en efectivo</MudText>
                     <MudText>@CashSold.ToString("C")</MudText>
                 </div>
+                @* Los reembolsos en efectivo se pagan con dinero de la caja. *@
+                <div class="d-flex justify-space-between py-1">
+                    <MudText>− Reembolsos en efectivo (@CashRefunds.Count)</MudText>
+                    <MudText>@CashRefunded.ToString("C")</MudText>
+                </div>
+                @foreach (var refund in CashRefunds)
+                {
+                    <div class="d-flex justify-space-between pl-4">
+                        <MudText Typo="Typo.body2">@refund.Person · @refund.Description</MudText>
+                        <MudText Typo="Typo.body2">@refund.Amount.ToString("C")</MudText>
+                    </div>
+                }
                 <div class="d-flex justify-space-between py-1">
                     <MudText><b>Debería haber</b></MudText>
                     <MudText><b>@Expected.ToString("C")</b></MudText>
@@ -117,6 +130,7 @@ else
 
     private List<Sale>? productSales;
     private List<(PaymentMethod Method, int Count, decimal Amount)> totals = [];
+    private List<CashMovement> refunds = [];
 
     private static readonly decimal[] Bills = [500m, 200m, 100m, 50m, 20m, 10m, 5m];
     private static readonly decimal[] Coins = [2m, 1m, 0.50m, 0.20m, 0.10m, 0.05m, 0.02m, 0.01m];
@@ -127,7 +141,9 @@ else
     private decimal openingFloat = 137.0m;
 
     private decimal CashSold => totals.Where(t => t.Method == PaymentMethod.Cash).Sum(t => t.Amount);
-    private decimal Expected => openingFloat + CashSold;
+    private List<CashMovement> CashRefunds => refunds.Where(r => !r.Canceled && r.PaymentMethod == PaymentMethod.Cash).ToList();
+    private decimal CashRefunded => CashRefunds.Sum(r => r.Amount);
+    private decimal Expected => openingFloat + CashSold - CashRefunded;
     private decimal Counted => counts.Sum(c => c.Key * c.Value);
     private decimal Difference => Counted - Expected;
 
@@ -157,6 +173,7 @@ else
     {
         productSales = await SalesService.GetSalesAsync(DateTime.Today, DateTime.Today.AddDays(1), SalesPoint);
         totals = PaymentMethods.Totals(productSales);
+        refunds = await RefundService.GetRefundsAsync(DateTime.Today, DateTime.Today.AddDays(1), SalesPoint);
     }
 
     private void Reset()

@@ -1,0 +1,258 @@
+@page "/refunds"
+@inject IRefundService RefundService
+@inject IDialogService Dialogs
+@inject IFileSaver FileSaver
+@inject IFilePicker FilePicker
+@inject ISnackbar Warnings
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    <h1 class="page-title mb-0">Reembolsos</h1>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="Add">
+        Nuevo reembolso
+    </MudButton>
+</div>
+
+<MudText Class="mb-4">
+    Dinero que se devuelve a un trabajador que ha pagado una compra del museo y trae la factura.
+    Los reembolsos en efectivo salen de la caja de Taquilla o de Tienda y se restan al cerrar esa caja.
+</MudText>
+
+@* Selector de mes: flechas grandes en vez de un calendario. *@
+<div class="d-flex align-center gap-2 mb-4">
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Variant="Variant.Outlined" Size="Size.Large"
+                   OnClick="() => ChangeMonth(-1)" aria-label="Mes anterior" />
+    <MudText Typo="Typo.h6" Class="export-month">@month.ToString("MMMM 'de' yyyy")</MudText>
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Variant="Variant.Outlined" Size="Size.Large"
+                   OnClick="() => ChangeMonth(1)" Disabled="@IsCurrentMonth" aria-label="Mes siguiente" />
+</div>
+
+@if (refunds is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudTable T="CashMovement" Items="refunds" Hover="true" Striped="true" Dense="true" Elevation="1" RowsPerPage="25"
+              Breakpoint="Breakpoint.Sm"
+              RowClassFunc="@((refund, _) => refund.Canceled ? "sale-canceled-row" : "")">
+        <HeaderContent>
+            <MudTh>
+                <MudTableSortLabel T="CashMovement" SortBy="r => r.Date" InitialDirection="SortDirection.Descending">Fecha</MudTableSortLabel>
+            </MudTh>
+            <MudTh><MudTableSortLabel T="CashMovement" SortBy="r => r.Person">Persona</MudTableSortLabel></MudTh>
+            <MudTh>Concepto</MudTh>
+            <MudTh>Factura</MudTh>
+            <MudTh><MudTableSortLabel T="CashMovement" SortBy="r => SalesExport.RefundOrigin(r)">Pagado desde</MudTableSortLabel></MudTh>
+            <MudTh Style="text-align:right">
+                <MudTableSortLabel T="CashMovement" SortBy="r => r.Amount">Importe</MudTableSortLabel>
+            </MudTh>
+            <MudTh />
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Fecha" Style="white-space:nowrap">@context.Date.ToString("dd/MM/yyyy HH:mm")</MudTd>
+            <MudTd DataLabel="Persona"><span class="product-name">@context.Person</span></MudTd>
+            <MudTd DataLabel="Concepto">
+                @context.Description
+                @if (context.Canceled)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-2">Anulado</MudChip>
+                }
+                @if (!string.IsNullOrEmpty(context.Notes))
+                {
+                    <MudText Typo="Typo.body2">@context.Notes</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Factura">
+                @if (!string.IsNullOrEmpty(context.InvoiceNumber))
+                {
+                    <div>Nº @context.InvoiceNumber</div>
+                }
+                @* Pulsar el archivo guarda una copia; la X lo quita. Si no tiene, se puede adjuntar ahora. *@
+                @if (context.InvoiceFileName is not null)
+                {
+                    <MudTooltip Text="Guardar una copia de la factura">
+                        <MudChip T="string" Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" Color="Color.Primary"
+                                 Variant="Variant.Outlined" Class="ml-0"
+                                 OnClick="() => SaveInvoice(context)" OnClose="() => RemoveInvoice(context)">
+                            @context.InvoiceFileName
+                        </MudChip>
+                    </MudTooltip>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.AttachFile" OnClick="() => AttachInvoice(context)">
+                        Adjuntar factura
+                    </MudButton>
+                }
+            </MudTd>
+            <MudTd DataLabel="Pagado desde">@SalesExport.RefundOrigin(context)</MudTd>
+            <MudTd DataLabel="Importe" Style="text-align:right;white-space:nowrap">@context.Amount.ToString("C")</MudTd>
+            <MudTd Style="text-align:right">
+                @if (!context.Canceled)
+                {
+                    <MudTooltip Text="Anular">
+                        <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" Size="Size.Small"
+                                       OnClick="() => Cancel(context)" aria-label="Anular" />
+                    </MudTooltip>
+                }
+            </MudTd>
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <MudText Class="pa-4">No hay reembolsos en este mes.</MudText>
+        </NoRecordsContent>
+
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Filas por página:"
+                           InfoFormat="{first_item}-{last_item} de {all_items}" />
+        </PagerContent>
+    </MudTable>
+
+    <MudPaper Class="pa-4 mt-4" Outlined="true">
+        <MudText Typo="Typo.h6">
+            Total reembolsado en el mes: <b>@refunds.Where(r => !r.Canceled).Sum(r => r.Amount).ToString("C")</b>
+        </MudText>
+    </MudPaper>
+}
+
+@code {
+    /// <summary>Primer día del mes que se está viendo.</summary>
+    private DateTime month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+
+    private List<CashMovement>? refunds;
+
+    private bool IsCurrentMonth => month.AddMonths(1) > DateTime.Today;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task ChangeMonth(int months)
+    {
+        month = month.AddMonths(months);
+        await Load();
+    }
+
+    private async Task Load() => refunds = await RefundService.GetRefundsAsync(month, month.AddMonths(1));
+
+    private static readonly DialogOptions CustomDialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+    };
+
+    private async Task Add()
+    {
+        var parameters = new DialogParameters<RefundDialog>
+        {
+            { x => x.Refund, new CashMovement() }
+        };
+        var dialog = await Dialogs.ShowAsync<RefundDialog>("Nuevo reembolso", parameters, CustomDialogOptions);
+        var result = await dialog.Result;
+        if (result is not { Canceled: false, Data: RefundDialog.Result(var refund, var invoice) }) return;
+
+        await Execute(
+            () => RefundService.RegisterRefundAsync(refund, invoice),
+            $"Reembolso de {refund.Amount:C} a {refund.Person} guardado.");
+
+        // Si se apunta mientras se mira otro mes, se vuelve al actual para verlo en la lista.
+        if (!IsCurrentMonth)
+        {
+            month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+            await Load();
+        }
+    }
+
+    private async Task Cancel(CashMovement refund)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Anular reembolso",
+            $"¿Seguro que quieres anular el reembolso de {refund.Amount:C} a {refund.Person}? Ya no contará en la caja, pero se conserva en el historial.",
+            yesText: "Anular",
+            cancelText: "Cancelar");
+
+        if (confirmed != true) return;
+
+        await Execute(
+            () => RefundService.CancelRefundAsync(refund.Id),
+            "Reembolso anulado.");
+    }
+
+    private async Task AttachInvoice(CashMovement refund)
+    {
+        InvoiceFile? invoice;
+        try
+        {
+            invoice = await InvoiceUploads.PickAsync(FilePicker);
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+            return;
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido leer el archivo. Inténtalo de nuevo.", Severity.Error);
+            return;
+        }
+        if (invoice is null) return;
+
+        await Execute(
+            () => RefundService.AttachInvoiceAsync(refund.Id, invoice),
+            $"Factura adjuntada al reembolso de {refund.Person}.");
+    }
+
+    private async Task RemoveInvoice(CashMovement refund)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Quitar factura",
+            $"¿Seguro que quieres quitar la factura «{refund.InvoiceFileName}» del reembolso de {refund.Person}?",
+            yesText: "Quitar",
+            cancelText: "Cancelar");
+
+        if (confirmed != true) return;
+
+        await Execute(() => RefundService.RemoveInvoiceAsync(refund.Id), "Factura quitada.");
+    }
+
+    private async Task SaveInvoice(CashMovement refund)
+    {
+        try
+        {
+            var invoice = await RefundService.GetInvoiceAsync(refund.Id);
+            if (invoice is null)
+            {
+                Warnings.Add("Este reembolso ya no tiene factura.", Severity.Warning);
+                await Load();
+                return;
+            }
+            if (await FileSaver.SaveAsync(invoice.FileName, invoice.Content))
+                Warnings.Add($"Factura guardada: {invoice.FileName}", Severity.Success);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar la factura. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    private async Task Execute(Func<Task> operation, string succeedMessage)
+    {
+        try
+        {
+            await operation();
+            Warnings.Add(succeedMessage, Severity.Success);
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el cambio. Inténtalo de nuevo.", Severity.Error);
+        }
+
+        await Load();
+    }
+}
