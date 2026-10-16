@@ -65,6 +65,10 @@ else
         <RowTemplate>
             <MudTd DataLabel="Product">
                 <div class="product-name">@context.Name</div>
+                @if (context.CountsAs > 1)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Class="ml-0">Cuenta como @context.CountsAs</MudChip>
+                }
                 @if (context.BarCode is not null)
                 {
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.BarCode</MudText>

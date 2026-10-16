@@ -23,11 +23,15 @@ else
                     <MudItem xs="12" sm="6" md="4">
                         <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Class="button-ticket"
                                    OnClick="() => Add(product)">
-                            <div class="d-flex align-center gap-6" style="width:100%">
-                                <div class="align-center">
-                                    <div class="title-ticket">@product.Name</div>
-                                    <div class="description-ticket">Precio: @product.SalePrice €</div>
-                                </div>
+                            @* "Cuenta como" va en la esquina, fuera del texto, para que todos los botones
+                               tengan el nombre y el precio a la misma altura. *@
+                            @if (product.CountsAs > 1)
+                            {
+                                <span class="counts-as-ticket">Cuenta como @product.CountsAs</span>
+                            }
+                            <div class="text-ticket">
+                                <div class="title-ticket">@product.Name</div>
+                                <div class="description-ticket">Precio: @product.SalePrice €</div>
                             </div>
                         </MudButton>
                     </MudItem>
@@ -54,6 +58,10 @@ else
                                 <div class="flex-grow-1">
                                     <MudText Typo="Typo.body1"><b>@line.Product.Name</b></MudText>
                                     <MudText Typo="Typo.body2">@line.Amount x @UnitPrice(line).ToString("C")</MudText>
+                                    @if (line.Product.CountsAs > 1)
+                                    {
+                                        <MudText Typo="Typo.body2">Cuenta como @(line.Amount * line.Product.CountsAs)</MudText>
+                                    }
                                     @if (line.Discount is not null)
                                     {
                                         <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Class="ml-0">

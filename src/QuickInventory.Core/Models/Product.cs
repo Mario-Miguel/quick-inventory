@@ -54,6 +54,13 @@ public class Product
     public bool StockControl { get; set; } = true;
 
     /// <summary>
+    /// Cuántas unidades cuenta cada venta de este producto en el recuento. Normalmente 1;
+    /// por ejemplo, un cupón de dos entradas cuenta como 2. No cambia el precio ni el stock,
+    /// y los suplementos y descuentos de visita se aplican una vez por producto vendido.
+    /// </summary>
+    public int CountsAs { get; set; } = 1;
+
+    /// <summary>
     /// Solo cambia mediante movimientos de stock (entradas, salidas, ventas),
     /// para que siempre quede registrado el description.
     /// </summary>

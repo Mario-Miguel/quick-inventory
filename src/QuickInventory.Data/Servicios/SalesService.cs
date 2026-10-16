@@ -125,6 +125,7 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
                 ProductId = product.Id,
                 Amount = line.Amount,
                 Description = product.Name,
+                CountsAs = product.CountsAs,
                 BasePrice = product.SalePrice + supplement,
                 UnitPrice = (line.Discount?.Apply(product.SalePrice) ?? product.SalePrice) + supplement - groupDiscount,
                 DiscountName = line.Discount?.Name,

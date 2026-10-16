@@ -51,7 +51,7 @@
             var from = DateTime.Today;
             var to = DateTime.Now;
             var sales = await SalesService.GetSalesAsync(from, to, SalesPoint.TicketOffice);
-            totalTickets = sales.Where(s => !s.Canceled).SelectMany(s => s.Lines).Sum(l => l.Amount);
+            totalTickets = sales.Where(s => !s.Canceled).SelectMany(s => s.Lines).Sum(l => l.CountedUnits);
         }
         
     }

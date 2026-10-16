@@ -48,6 +48,13 @@
                                      Variant="Variant.Outlined" />
                 </div>
 
+                <MudNumericField T="int"
+                                 @bind-Value="Product.CountsAs"
+                                 Label="Cuenta como"
+                                 HelperText="Unidades que suma al recuento cada vez que se vende. Por ejemplo, un cupón de 2 entradas cuenta como 2"
+                                 Min="1"
+                                 Variant="Variant.Outlined" />
+
                 <MudSwitch T="bool"
                            @bind-Value="Product.StockControl"
                            Color="Color.Primary"

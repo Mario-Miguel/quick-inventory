@@ -115,6 +115,9 @@ public static class SalesExport
             new("Anulada", s => YesNo(s.Canceled), null),
             new("Producto", s => Products(s), (_, l) => l.Description),
             new("Cantidad", s => s.Lines.Sum(l => l.Amount), (_, l) => l.Amount),
+            // Unidades para el recuento: un cupón de 2 entradas vendido 3 veces son 6.
+            new(salesPoint == SalesPoint.TicketOffice ? "Entradas" : "Unidades contadas",
+                s => s.Lines.Sum(l => l.CountedUnits), (_, l) => l.CountedUnits),
             new("Precio", s => s.Lines.Sum(l => l.Amount * l.BasePrice), (_, l) => l.BasePrice, EurosFormat),
             new("Descuento", s => Discounts(s), (s, l) => Discount(s, l)),
             new("Descontado", s => s.Lines.Sum(l => l.DiscountTotal), (_, l) => l.DiscountTotal, EurosFormat),

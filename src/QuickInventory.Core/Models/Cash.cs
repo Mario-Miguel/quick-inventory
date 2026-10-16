@@ -53,6 +53,12 @@ public class SalesLine
     /// <summary>Copia del porcentaje de descuento aplicado (0 si no tiene).</summary>
     public decimal DiscountPercent { get; set; }
 
+    /// <summary>Copia de <see cref="Product.CountsAs"/> en el momento de la venta, por si luego cambia.</summary>
+    public int CountsAs { get; set; } = 1;
+
+    /// <summary>Unidades que cuenta la línea en el recuento (por ejemplo, 3 cupones de 2 = 6 entradas).</summary>
+    public int CountedUnits => Amount * CountsAs;
+
     public decimal Subtotal => Amount * UnitPrice;
 
     /// <summary>Euros descontados en esta línea.</summary>

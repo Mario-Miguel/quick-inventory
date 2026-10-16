@@ -98,7 +98,13 @@
                                     {
                                         <tr>
                                             <td>@line.Description</td>
-                                            <td style="text-align:right">@line.Amount</td>
+                                            <td style="text-align:right">
+                                                @line.Amount
+                                                @if (line.CountsAs > 1)
+                                                {
+                                                    <span class="mud-text-secondary">(cuenta como @line.CountedUnits)</span>
+                                                }
+                                            </td>
                                             <td style="text-align:right">@line.BasePrice.ToString("C")</td>
                                             <td style="text-align:right">
                                                 @if (line.DiscountName is not null)

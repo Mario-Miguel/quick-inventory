@@ -44,12 +44,34 @@ body {
   margin-top: 4px;
 }
 
+/* height: 100% para que todos los botones de una fila midan lo mismo aunque un nombre ocupe dos líneas. */
 .button-ticket {
+  position: relative;
   min-height: 140px;
+  height: 100%;
   padding: 24px !important;
-  justify-content: flex-start !important;
+  justify-content: center !important;
   background: #ffffff;
   border-width: 2px !important;
+}
+
+.text-ticket {
+  width: 100%;
+  text-align: center;
+}
+
+/* Etiqueta "Cuenta como N" en la esquina: no mueve el texto del botón. */
+.counts-as-ticket {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--mud-palette-secondary);
+  color: var(--mud-palette-secondary-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: none;
 }
 
 .title-ticket {

@@ -73,6 +73,7 @@ public sealed class InventoryService(IDbContextFactory<BaseDbContext> factory) :
             existing.CostPrice = product.CostPrice;
             existing.StockControl = product.StockControl;
             existing.MinStock = product.MinStock;
+            existing.CountsAs = product.CountsAs;
         }
 
         await db.SaveChangesAsync();
@@ -134,5 +135,7 @@ public sealed class InventoryService(IDbContextFactory<BaseDbContext> factory) :
             throw new BusinessRuleException("Los precios no pueden ser negativos.");
         if (p.Stock < 0 || p.MinStock < 0)
             throw new BusinessRuleException("El stock no puede ser negativo.");
+        if (p.CountsAs < 1)
+            throw new BusinessRuleException("Cada producto tiene que contar como 1 unidad o más.");
     }
 }
