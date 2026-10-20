@@ -184,3 +184,77 @@ body {
 .export-month::first-letter {
   text-transform: uppercase;
 }
+
+/* Entradas online: calendario del mes, de lunes a domingo. */
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-weight: 600;
+  color: #4b5563;
+  padding-bottom: 4px;
+}
+
+.calendar-day {
+  min-height: 80px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calendar-day:hover {
+  border-color: var(--mud-palette-primary-lighten);
+}
+
+.calendar-day-outside {
+  border: none;
+  background: transparent;
+  cursor: default;
+}
+
+.calendar-day-selected,
+.calendar-day-selected:hover {
+  border-color: var(--mud-palette-primary);
+  box-shadow: 0 0 0 2px var(--mud-palette-primary);
+}
+
+.calendar-day-number {
+  font-weight: 600;
+}
+
+.calendar-day-today .calendar-day-number {
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--mud-palette-primary);
+  color: var(--mud-palette-primary-text);
+  align-self: flex-start;
+}
+
+.calendar-day-count {
+  margin-top: auto;
+  align-self: flex-end;
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Tabla de horas del día: con muchos tipos de entrada hace scroll en horizontal. */
+.online-hours {
+  overflow-x: auto;
+}
+
+.online-hours-total td {
+  font-weight: 700;
+  border-top: 2px solid #d1d5db;
+}

@@ -1,0 +1,135 @@
+@page "/online-shop"
+@inject IOnlineTicketService OnlineTicketService
+@inject ISnackbar Warnings
+
+<h1 class="page-title">Tienda online</h1>
+
+<MudText Class="mb-4">
+    Conexión con la tienda online (PrestaShop) para que Taquilla vea las entradas compradas por internet.
+    Solo se leen los pedidos: desde aquí no se cambia nada en la tienda.
+</MudText>
+
+<MudGrid Spacing="6">
+    <MudItem xs="12" md="7">
+        <MudPaper Class="pa-4" Outlined="true">
+            <MudStack Spacing="4">
+                <MudTextField @bind-Value="settings.Url" Label="Dirección de la tienda" Variant="Variant.Outlined"
+                              Placeholder="https://tienda.ejemplo.com"
+                              HelperText="@($"Escribe «{OnlineShopSettings.DemoUrl}» para ver entradas de ejemplo sin conectarse a la tienda.")" />
+                <MudTextField @bind-Value="settings.ApiKey" Label="Clave de la API (Webservice)" Variant="Variant.Outlined"
+                              InputType="@(showKey ? InputType.Text : InputType.Password)"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(showKey ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                              OnAdornmentClick="() => showKey = !showKey" AdornmentAriaLabel="Mostrar la clave" />
+                <MudTextField @bind-Value="settings.TicketProductIds" Label="Productos que son entradas (opcional)"
+                              Variant="Variant.Outlined" Placeholder="12, 15"
+                              HelperText="Números (ID) de los productos de PrestaShop separados por comas. Vacío: cuenta todo lo de los pedidos." />
+                <MudNumericField @bind-Value="settings.DaysInAdvance" Label="Días de antelación" Variant="Variant.Outlined"
+                                 Min="1" Max="730"
+                                 HelperText="Con cuánto tiempo como mucho se compran las entradas. Cuanto más, más tarda en cargar." />
+                <div class="d-flex flex-wrap gap-4">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+                               StartIcon="@Icons.Material.Filled.NetworkCheck" OnClick="Test" Disabled="busy">
+                        Probar conexión
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                               StartIcon="@Icons.Material.Filled.Save" OnClick="Save" Disabled="busy">
+                        Guardar
+                    </MudButton>
+                </div>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="5">
+        <MudPaper Class="pa-4" Outlined="true">
+            <MudText Typo="Typo.h6" Class="mb-2">Cómo conseguir la clave</MudText>
+            <ol class="ml-6">
+                <li>En el panel de PrestaShop, ve a <b>Parámetros avanzados → Webservice</b>.</li>
+                <li>Activa <b>Habilitar el webservice de PrestaShop</b> y guarda.</li>
+                <li>Pulsa <b>Añadir nueva clave</b> y genera una.</li>
+                <li>En los permisos marca solo <b>Ver (GET)</b> en <b>orders</b>.</li>
+                <li>Copia la clave aquí y pulsa <b>Probar conexión</b>.</li>
+            </ol>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@if (busy)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-6" />
+}
+
+@if (sample is not null)
+{
+    @* Para comprobar que el día y la hora de la visita se sacan bien del nombre de cada línea. *@
+    <MudText Typo="Typo.h6" Class="mt-6 mb-2">Últimos pedidos</MudText>
+    <MudText Class="mb-2">
+        Comprueba que el día, la hora y el tipo coinciden con lo que eligió el cliente. Si salen vacíos, la tienda
+        guarda la fecha de otra forma y hay que adaptar la aplicación.
+    </MudText>
+    <MudTable T="OnlineTicket" Items="sample" Dense="true" Striped="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Pedido</MudTh>
+            <MudTh>Comprado</MudTh>
+            <MudTh>Pagado</MudTh>
+            <MudTh>Producto (tal cual en la tienda)</MudTh>
+            <MudTh>Tipo</MudTh>
+            <MudTh>Día visita</MudTh>
+            <MudTh>Hora</MudTh>
+            <MudTh Style="text-align:right">Cantidad</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Pedido">@context.OrderReference (@context.OrderId)</MudTd>
+            <MudTd DataLabel="Comprado" Style="white-space:nowrap">@context.OrderDate.ToString("dd/MM/yyyy HH:mm")</MudTd>
+            <MudTd DataLabel="Pagado">@(context.Paid ? "Sí" : "No")</MudTd>
+            <MudTd DataLabel="Producto">@context.ProductName <span class="mud-text-secondary">(ID @context.ProductId)</span></MudTd>
+            <MudTd DataLabel="Tipo">@context.Type</MudTd>
+            <MudTd DataLabel="Día visita">@(context.VisitDay?.ToString("dd/MM/yyyy") ?? "—")</MudTd>
+            <MudTd DataLabel="Hora">@(context.VisitTime?.ToString("HH:mm") ?? "—")</MudTd>
+            <MudTd DataLabel="Cantidad" Style="text-align:right">@context.Quantity</MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Class="pa-4">La conexión funciona, pero no hay pedidos (o ninguno lleva los productos indicados).</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    private OnlineShopSettings settings = new();
+    private List<OnlineTicket>? sample;
+    private bool showKey;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync() => settings = await OnlineTicketService.GetSettingsAsync();
+
+    private async Task Test()
+    {
+        sample = null;
+        await Execute(async () => sample = await OnlineTicketService.TestConnectionAsync(settings), "Conexión correcta.");
+    }
+
+    private Task Save() => Execute(() => OnlineTicketService.SaveSettingsAsync(settings), "Configuración guardada.");
+
+    private async Task Execute(Func<Task> operation, string succeedMessage)
+    {
+        busy = true;
+        try
+        {
+            await operation();
+            Warnings.Add(succeedMessage, Severity.Success);
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("Ha ocurrido un error inesperado. Inténtalo de nuevo.", Severity.Error);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

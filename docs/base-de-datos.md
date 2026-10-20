@@ -18,15 +18,14 @@ erDiagram
 
     Products {
         INTEGER Id PK
+        TEXT Type "discriminador: Ticket | Shop"
         TEXT Name "obligatorio"
-        TEXT Category "Ticket | Shop"
-        TEXT BarCode "opcional, con índice"
         INTEGER SalePrice "céntimos"
-        INTEGER CostPrice "céntimos"
-        INTEGER StockControl "bool"
-        INTEGER CountsAs "unidades en el recuento (1 normalmente)"
-        INTEGER Stock "solo cambia con StockMovements"
-        INTEGER MinStock
+        INTEGER CountsAs "solo Ticket: unidades en el recuento (1 normalmente)"
+        TEXT BarCode "solo Shop: opcional, con índice"
+        INTEGER CostPrice "solo Shop: céntimos"
+        INTEGER Stock "solo Shop: solo cambia con StockMovements"
+        INTEGER MinStock "solo Shop"
         INTEGER Active "bool; nunca se borra"
         TEXT RegistrationDate
     }
@@ -89,18 +88,27 @@ erDiagram
         TEXT ContentType
         BLOB Content "PDF o imagen, máx. 10 MB"
     }
+
+    OnlineShopSettings {
+        INTEGER Id PK "una sola fila"
+        TEXT Url "dirección de PrestaShop"
+        TEXT ApiKey "clave del Webservice (solo GET en orders)"
+        TEXT TicketProductIds "ids separados por comas; vacío = todos"
+        INTEGER DaysInAdvance "antelación máxima de compra"
+    }
 ```
 
 ## Tablas
 
 | Tabla            | Modelo (`QuickInventory.Core/Models`) | Para qué sirve                                                                                           |
 | ---------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `Products`       | `Product`                             | Todo lo que se vende: entradas (Taquilla) y artículos (Tienda).                                          |
+| `Products`       | `Product` (`TicketProduct`, `ShopProduct`) | Todo lo que se vende: entradas (Taquilla) y artículos (Tienda). Una sola tabla; `Type` dice cuál es y las columnas del otro tipo quedan a null. |
 | `Sales`          | `Sale`                                | Una venta: fecha, punto de venta, método de pago y total.                                                |
 | `SaleLines`      | `SalesLine`                           | Cada producto de una venta, con nombre y precios **copiados** del momento de la venta.                   |
 | `StockMovements` | `StockMovement`                       | Historial de cada cambio de stock (ajustes, ventas, anulaciones).                                        |
 | `CashMovements`  | `CashMovement`                        | Dinero que entra o sale y no es una venta. Hoy solo reembolsos (`Category = "Reembolso"`, `Type = Pay`). |
 | `InvoiceFiles`   | `InvoiceFile`                         | Factura escaneada de un `CashMovement`. Tabla aparte para no cargar el archivo al listar.                |
+| `OnlineShopSettings` | `OnlineShopSettings`              | Conexión con la tienda online (PrestaShop). Las entradas online (`OnlineTicket`) no se guardan: se leen de la tienda cada vez. |
 
 ## Relaciones
 

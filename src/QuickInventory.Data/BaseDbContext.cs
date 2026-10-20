@@ -12,6 +12,7 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
     public DbSet<SalesLine> SaleLines => Set<SalesLine>();
     public DbSet<CashMovement> CashMovements => Set<CashMovement>();
     public DbSet<InvoiceFile> InvoiceFiles => Set<InvoiceFile>();
+    public DbSet<OnlineShopSettings> OnlineShopSettings => Set<OnlineShopSettings>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configuration)
     {
@@ -81,6 +82,13 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
             e.Property(f => f.FileName).HasMaxLength(260).IsRequired();
             e.Property(f => f.ContentType).HasMaxLength(100);
             e.HasOne<CashMovement>().WithOne().HasForeignKey<InvoiceFile>(f => f.CashMovementId);
+        });
+
+        model.Entity<OnlineShopSettings>(e =>
+        {
+            e.Property(s => s.Url).HasMaxLength(300);
+            e.Property(s => s.ApiKey).HasMaxLength(100);
+            e.Property(s => s.TicketProductIds).HasMaxLength(500);
         });
     }
 }
