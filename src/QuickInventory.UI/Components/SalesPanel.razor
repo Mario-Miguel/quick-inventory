@@ -1,5 +1,4 @@
 @inject IInventoryService InventoryService
-@inject ISalesService SalesService
 @inject IDialogService Dialogs
 @inject ISnackbar Warnings
 
@@ -25,10 +24,7 @@ else
                                    OnClick="() => Add(product)">
                             @* "Cuenta como" va en la esquina, fuera del texto, para que todos los botones
                                tengan el nombre y el precio a la misma altura. *@
-                            @if (product.CountsAs > 1)
-                            {
-                                <span class="counts-as-ticket">Cuenta como @product.CountsAs</span>
-                            }
+                            <ProductBadges Product="product" />
                             <div class="text-ticket">
                                 <div class="title-ticket">@product.Name</div>
                                 <div class="description-ticket">Precio: @product.SalePrice €</div>
@@ -58,10 +54,7 @@ else
                                 <div class="flex-grow-1">
                                     <MudText Typo="Typo.body1"><b>@line.Product.Name</b></MudText>
                                     <MudText Typo="Typo.body2">@line.Amount x @UnitPrice(line).ToString("C")</MudText>
-                                    @if (line.Product.CountsAs > 1)
-                                    {
-                                        <MudText Typo="Typo.body2">Cuenta como @(line.Amount * line.Product.CountsAs)</MudText>
-                                    }
+                                    <ProductBadges Product="line.Product" Amount="line.Amount" />
                                     @if (line.Discount is not null)
                                     {
                                         <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Class="ml-0">
@@ -93,15 +86,7 @@ else
                         }
                     </div>
 
-                    @if (ShowVisitOptions)
-                    {
-                        <MudSwitch @bind-Value="guidedVisit" Color="Color.Primary" Class="mt-4">
-                            Visita guiada (+@Sale.GuidedVisitSupplement.ToString("C") por entrada)
-                        </MudSwitch>
-                        <MudSwitch @bind-Value="groupVisit" Color="Color.Primary" Class="mt-4">
-                            Visita grupal (-@Sale.GroupVisitDiscount.ToString("C") por entrada)
-                        </MudSwitch>
-                    }
+                    @Options
 
                     <div class="d-flex justify-space-between align-center mt-4">
                         <MudText Typo="Typo.h6">Total</MudText>
@@ -142,11 +127,18 @@ else
 
     [Parameter, EditorRequired] public SalesPoint SalesPoint { get; set; }
     [Parameter, EditorRequired] public string Title { get; set; } = "";
-    /// <summary>Muestra los interruptores de visita guiada y grupal (solo en taquilla).</summary>
-    [Parameter] public bool ShowVisitOptions { get; set; }
 
-    private bool guidedVisit;
-    private bool groupVisit;
+    /// <summary>Opciones propias del tipo de venta (por ejemplo, visita guiada). Salen encima del total.</summary>
+    [Parameter] public RenderFragment? Options { get; set; }
+
+    /// <summary>Euros que se suman (o restan) a cada unidad según las opciones elegidas.</summary>
+    [Parameter] public decimal UnitAdjustment { get; set; }
+
+    /// <summary>Guarda la venta. Cada tipo de venta llama a su método de ISalesService.</summary>
+    [Parameter, EditorRequired] public Func<PaymentMethod, IReadOnlyList<CartLine>, Task> Register { get; set; } = default!;
+
+    /// <summary>Se llama después de guardar la venta, para que la página limpie sus opciones.</summary>
+    [Parameter] public EventCallback OnSaved { get; set; }
 
     private List<Product>? products;
 
@@ -166,9 +158,8 @@ else
         public decimal UnitPrice => Discount?.Apply(Product.SalePrice) ?? Product.SalePrice;
     }
 
-    /// <summary>Precio por entrada, con el suplemento si es visita guiada (igual que en SalesService).</summary>
-    private decimal UnitPrice(SelectedProduct line) =>
-        line.UnitPrice + (guidedVisit ? Sale.GuidedVisitSupplement : 0) - (groupVisit ? Sale.GroupVisitDiscount : 0);
+    /// <summary>Precio por unidad, con el ajuste de las opciones del tipo de venta (igual que en SalesService).</summary>
+    private decimal UnitPrice(SelectedProduct line) => line.UnitPrice + UnitAdjustment;
 
     private decimal Total => lines.Sum(l => l.Amount * UnitPrice(l));
 
@@ -226,7 +217,7 @@ else
         var total = Total;
 
         var saved = await Execute(
-            () => SalesService.RegisterSaleAsync(SalesPoint, paymentMethod!.Value, cart, guidedVisit, groupVisit),
+            () => Register(paymentMethod!.Value, cart),
             $"Venta guardada: {total:C}.");
 
         // Si no se ha podido guardar, se deja la venta como estaba para poder reintentarlo.
@@ -234,8 +225,7 @@ else
         {
             lines.Clear();
             paymentMethod = null;
-            guidedVisit = false;
-            groupVisit = false;
+            await OnSaved.InvokeAsync();
         }
     }
     /// <summary>

@@ -38,24 +38,24 @@ public static class DataConfiguration
         var t0 = DateTime.Now;
         var examples = new List<Product>
         {
-            new() { Name = "Entrada general", Category = ProductCategory.Ticket, SalePrice = 5.00m, StockControl = false },
-            new() { Name = "Entrada reducida", Category = ProductCategory.Ticket, SalePrice = 3.00m, StockControl = false },
-            new() { Name = "Botella de sidra natural", Category = ProductCategory.Shop, SalePrice = 3.50m, CostPrice = 1.80m, Stock = 48, MinStock = 12 },
-            new() { Name = "Vaso de sidra", Category = ProductCategory.Shop, SalePrice = 4.00m, CostPrice = 1.50m, Stock = 30, MinStock = 10 },
-            new() { Name = "Camiseta del museo", Category = ProductCategory.Shop, SalePrice = 15.00m, CostPrice = 6.00m, Stock = 6, MinStock = 8 },
-            new() { Name = "Postal", Category = ProductCategory.Shop, SalePrice = 1.00m, CostPrice = 0.30m, Stock = 120, MinStock = 20 },
+            new TicketProduct() { Name = "Entrada general", SalePrice = 5.00m, },
+            new TicketProduct() { Name = "Entrada reducida", SalePrice = 3.00m, },
+            new ShopProduct() { Name = "Botella de sidra natural", SalePrice = 3.50m, CostPrice = 1.80m, Stock = 48, MinStock = 12 },
+            new ShopProduct() { Name = "Vaso de sidra", SalePrice = 4.00m, CostPrice = 1.50m, Stock = 30, MinStock = 10 },
+            new ShopProduct() { Name = "Camiseta del museo", SalePrice = 15.00m, CostPrice = 6.00m, Stock = 6, MinStock = 8 },
+            new ShopProduct() { Name = "Postal", SalePrice = 1.00m, CostPrice = 0.30m, Stock = 120, MinStock = 20 },
         };
 
         foreach (var p in examples)
         {
             p.RegistrationDate = t0;
             db.Products.Add(p);
-            if (p.StockControl && p.Stock > 0)
+            if (p is ShopProduct { Stock: > 0 } shopProduct)
             {
                 db.StockMovements.Add(new StockMovement
                 {
-                    Product = p,
-                    Amount = p.Stock,
+                    Product = shopProduct,
+                    Amount = shopProduct.Stock,
                     Type = StockMovementType.Input,
                     Description = "Stock inicial (datos de ejemplo)",
                     Date = t0

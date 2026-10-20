@@ -32,11 +32,18 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
     {
         model.Entity<Product>(e =>
         {
+            e.HasDiscriminator<string>("Type")
+            .HasValue<TicketProduct>("Ticket")
+            .HasValue<ShopProduct>("Shop");
+            e.Ignore(p => p.Category);
             e.Property(p => p.Name).HasMaxLength(200).IsRequired();
-            e.Property(p => p.Category).HasMaxLength(100);
+            e.HasIndex(p => p.Name);
+        });
+
+        model.Entity<ShopProduct>(e =>
+        {
             e.Property(p => p.BarCode).HasMaxLength(50);
             e.HasIndex(p => p.BarCode);
-            e.HasIndex(p => p.Name);
         });
 
         model.Entity<StockMovement>(e =>
@@ -47,6 +54,9 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
 
         model.Entity<Sale>(e =>
         {
+            e.HasDiscriminator(s => s.SalesPoint)
+       .HasValue<TicketSale>(SalesPoint.TicketOffice)
+       .HasValue<ShopSale>(SalesPoint.Shop);
             e.HasMany(v => v.Lines).WithOne().HasForeignKey(l => l.SaleId);
             e.HasIndex(v => v.Date);
         });

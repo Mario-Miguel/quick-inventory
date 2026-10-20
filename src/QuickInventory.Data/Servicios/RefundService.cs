@@ -30,7 +30,7 @@ public sealed class RefundService(IDbContextFactory<BaseDbContext> factory) : IR
                 throw new BusinessRuleException("Elige de qué caja sale el dinero: Taquilla o Tienda.");
             case PaymentMethod.BankTransfer when refund.SalesPoint is not null:
                 throw new BusinessRuleException("Una transferencia no sale de ninguna caja.");
-            case PaymentMethod.Card or PaymentMethod.Bizum:
+            case PaymentMethod.Card:
                 throw new BusinessRuleException("Un reembolso se paga en efectivo de una caja o por transferencia.");
         }
 

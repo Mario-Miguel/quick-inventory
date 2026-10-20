@@ -1,4 +1,3 @@
-using System.Reflection.Metadata;
 using Microsoft.EntityFrameworkCore;
 using QuickInventory.Core;
 using QuickInventory.Core.Models;
@@ -12,7 +11,7 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
     {
         await using var db = await factory.CreateDbContextAsync();
 
-        var sale = await db.Sales.Include(s=>s.Lines).FirstOrDefaultAsync(s => s.Id==saleId) ?? throw new BusinessRuleException($"La venta {saleId} ya no existe");
+        var sale = await db.Sales.Include(s => s.Lines).FirstOrDefaultAsync(s => s.Id == saleId) ?? throw new BusinessRuleException($"La venta {saleId} ya no existe");
 
         if (sale.Canceled)
         {
@@ -24,17 +23,17 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
         foreach (var line in sale.Lines)
         {
             var product = await db.Products.FindAsync(line.ProductId);
-            if (product is null || !product.StockControl) continue;
+            if (product is not ShopProduct shopProduct) continue;
 
-            product.Stock += line.Amount;
+            shopProduct.Stock += line.Amount;
             db.StockMovements.Add(new StockMovement
             {
-                ProductId=product.Id,
+                ProductId = shopProduct.Id,
                 Amount = line.Amount,
-                    Type=StockMovementType.Cancelation,
-                    Description=$"Anulación de la venta {saleId}",
-                    Date=DateTime.Now,
-                    SaleId = saleId
+                Type = StockMovementType.Cancelation,
+                Description = $"Anulación de la venta {saleId}",
+                Date = DateTime.Now,
+                SaleId = saleId
             });
         }
         await db.SaveChangesAsync();
@@ -49,36 +48,53 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
             .Where(s => s.Date < to)
             .Where(s => salesPoint == null || s.SalesPoint == salesPoint)
             .OrderBy(s => s.Date)
-            .Include(s=>s.Lines)
+            .Include(s => s.Lines)
             .ToListAsync();
     }
 
-    public async Task<Sale> RegisterSaleAsync(SalesPoint salesPoint, PaymentMethod paymentMethod, IReadOnlyList<CartLine> lines, bool guidedVisit = false, bool groupVisit = false)
+    public async Task<Sale> RegisterTicketSaleAsync(PaymentMethod paymentMethod, IReadOnlyList<CartLine> lines, bool guidedVisit, bool groupVisit)
     {
         if (lines.Count == 0)
         {
             throw new BusinessRuleException("No hay nada que cobrar");
         }
-        if (salesPoint == SalesPoint.Admin)
+
+        await using var db = await factory.CreateDbContextAsync();
+
+        var sale = new TicketSale { Date = DateTime.Now, PaymentMethod = paymentMethod, GuidedVisit = guidedVisit, GroupVisit = groupVisit };
+        // El suplemento de la visita guiada se suma después del descuento: el descuento es solo sobre la entrada.
+        var supplement = guidedVisit ? TicketSale.GuidedVisitSupplement : 0;
+        var groupDiscount = groupVisit ? TicketSale.GroupVisitDiscount : 0;
+
+        await AddLinesAsync(db, sale, lines, supplement, groupDiscount);
+
+        sale.Total = sale.Lines.Sum(l => l.Subtotal);
+        db.Sales.Add(sale);
+        await db.SaveChangesAsync();
+        return sale;
+    }
+
+    public async Task<Sale> RegisterShopSaleAsync(PaymentMethod paymentMethod, IReadOnlyList<CartLine> lines)
+    {
+        if (lines.Count == 0)
         {
-            throw new BusinessRuleException("Admin no puede vender");
-        }
-        if (guidedVisit && salesPoint != SalesPoint.TicketOffice)
-        {
-            throw new BusinessRuleException("Solo se pueden vender visitas guiadas en taquilla.");
-        }
-        if (groupVisit && salesPoint != SalesPoint.TicketOffice)
-        {
-            throw new BusinessRuleException("Solo se pueden hacer descuentos por grrupo en taquilla.");
+            throw new BusinessRuleException("No hay nada que cobrar");
         }
 
         await using var db = await factory.CreateDbContextAsync();
 
-        var sale = new Sale{Date = DateTime.Now, SalesPoint= salesPoint, PaymentMethod= paymentMethod, GuidedVisit = guidedVisit, GroupVisit = groupVisit};
-        // El suplemento de la visita guiada se suma después del descuento: el descuento es solo sobre la entrada.
-        var supplement = guidedVisit ? Sale.GuidedVisitSupplement : 0;
-        var groupDiscount = groupVisit ? Sale.GroupVisitDiscount : 0;
+        var sale = new ShopSale { Date = DateTime.Now, PaymentMethod = paymentMethod, };
 
+        await AddLinesAsync(db, sale, lines);
+
+        sale.Total = sale.Lines.Sum(l => l.Subtotal);
+        db.Sales.Add(sale);
+        await db.SaveChangesAsync();
+        return sale;
+    }
+
+    private async static Task AddLinesAsync(BaseDbContext db, Sale sale, IReadOnlyList<CartLine> lines, decimal supplement = 0, decimal discount = 0)
+    {
         foreach (var line in lines)
         {
             if (line.Amount <= 0)
@@ -90,32 +106,27 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
                 throw new BusinessRuleException("El descuento tiene que estar entre 0 y 100 %.");
             }
             var product = await db.Products.FindAsync(line.ProductId) ?? throw new BusinessRuleException($"El producto {line.ProductId} no existe.");
-            
+
             if (!product.Active)
             {
                 throw new BusinessRuleException($"Producto {product.Name} descatalogado.");
             }
-            if (product.Category.SalesPoint != salesPoint)
+            if (product.Category.SalesPoint != sale.SalesPoint)
             {
                 throw new BusinessRuleException("Producto no pertenece al punto de venta.");
             }
 
-            if (product.StockControl)
+            if (product is ShopProduct shopProduct)
             {
-                if(product.Stock < line.Amount)
-                {
-                    throw new BusinessRuleException($"No hay stock suficiente. Quedan {product.Stock} unidades de {product.Name}");
-                }
-
-                product.Stock -= line.Amount;
+                shopProduct.ChangeStock(-line.Amount);
 
                 db.StockMovements.Add(new StockMovement
                 {
-                    ProductId= product.Id,
+                    ProductId = product.Id,
                     Amount = -line.Amount,
-                    Type=StockMovementType.Sale,
-                    Description="Venta",
-                    Date=sale.Date,
+                    Type = StockMovementType.Sale,
+                    Description = "Venta",
+                    Date = sale.Date,
                     Sale = sale
                 });
             }
@@ -125,19 +136,14 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
                 ProductId = product.Id,
                 Amount = line.Amount,
                 Description = product.Name,
-                CountsAs = product.CountsAs,
+                CountsAs = product is TicketProduct ticketProduct ? ticketProduct.CountsAs : 1,
                 BasePrice = product.SalePrice + supplement,
-                UnitPrice = (line.Discount?.Apply(product.SalePrice) ?? product.SalePrice) + supplement - groupDiscount,
+                UnitPrice = (line.Discount?.Apply(product.SalePrice) ?? product.SalePrice) + supplement - discount,
                 DiscountName = line.Discount?.Name,
                 DiscountPercent = line.Discount?.Amount ?? 0,
                 Category = product.Category
             });
         }
-
-        sale.Total = sale.Lines.Sum(l=>l.Subtotal);
-        db.Sales.Add(sale);
-        await db.SaveChangesAsync();
-        return sale;
     }
 
     public async Task ChangePaymentMethodAsync(int saleId, PaymentMethod paymentMethod)

@@ -30,10 +30,11 @@
                     <MudTableSortLabel T="Sale" SortBy="s => s.Total">Total</MudTableSortLabel>
                 </MudTh>
 
-                @if (ShowVisitOptions)
+                @* Columnas propias del tipo de venta (por ejemplo, visita guiada en taquilla). *@
+                @foreach (var field in Fields)
                 {
                     <MudTh Style="text-align:center">
-                        <MudTableSortLabel T="Sale" SortBy="s => s.GuidedVisit">Guiada</MudTableSortLabel>
+                        <MudTableSortLabel T="Sale" SortBy="field.Text">@field.Header</MudTableSortLabel>
                     </MudTh>
                 }
                 <MudTh />
@@ -52,14 +53,9 @@
                 <MudTd DataLabel="Pago">@PaymentMethods.Name(context.PaymentMethod)</MudTd>
                 <MudTd DataLabel="Total" Style="text-align:right;white-space:nowrap">@context.Total.ToString("C")
                 </MudTd>
-                @if (ShowVisitOptions)
+                @foreach (var field in Fields)
                 {
-                    <MudTd DataLabel="Guiada" Style="text-align:center">
-                        @if (context.GuidedVisit)
-                        {
-                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" aria-label="Visita guiada" />
-                        }
-                    </MudTd>
+                    <MudTd DataLabel="@field.Header" Style="text-align:center">@field.Text(context)</MudTd>
                 }
                 <MudTd Style="text-align:right">
                     @* stopPropagation: pulsar los botones no despliega la fila. *@
@@ -81,7 +77,7 @@
                 {
                     @* tr normal en vez de MudTr: así la fila del detalle no se colorea al pasar el ratón. *@
                     <tr class="sale-detail-row">
-                        <td colspan="6" class="pa-4">
+                        <td colspan="@ColumnCount" class="pa-4">
                             <MudSimpleTable Dense="true" Outlined="true" Hover="true">
                                 <thead>
                                     <tr>
@@ -162,8 +158,12 @@
 @code {
     [Parameter, EditorRequired] public SalesPoint SalesPoint { get; set; }
     [Parameter, EditorRequired] public string Title { get; set; } = "";
-    [Parameter] public bool ShowVisitOptions { get; set; } = false;
-    /// <summary>Muestra los interruptores de visita guiada y grupal (solo en taquilla).</summary>
+
+    /// <summary>Columnas propias del tipo de venta de este punto de venta.</summary>
+    private IReadOnlyList<SaleField> Fields => SaleTypes.For(SalesPoint)?.Fields ?? [];
+
+    /// <summary>Columnas de la tabla: desplegar, ID, hora, pago, total, las propias y los botones.</summary>
+    private int ColumnCount => 6 + Fields.Count;
 
     private List<Sale> productSales = [];
 

@@ -1,4 +1,5 @@
 @page "/shop/sales"
+@inject ISalesService SalesService
 
-
-<SalesPanel SalesPoint="SalesPoint.Shop" Title="Tienda" ShowVisitOptions="false" />
+<SalesPanel SalesPoint="SalesPoint.Shop" Title="Tienda"
+            Register="(method, cart) => SalesService.RegisterShopSaleAsync(method, cart)" />

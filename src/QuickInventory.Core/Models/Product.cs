@@ -39,38 +39,35 @@ public sealed record ProductCategory
 /// Cualquier cosa que el museo vende: artículos de tienda, bebidas, entradas...
 /// Las entradas y los servicios no controlan stock (StockControl = false).
 /// </summary>
-public class Product
+public abstract class Product
 {
     public int Id { get; set; }
     public string Name { get; set; } = "";
-
-    
-    public ProductCategory Category { get; set; } = ProductCategory.Shop;
-    public string? BarCode { get; set; }
-
-    public decimal SalePrice { get; set; }
-    public decimal CostPrice { get; set; }
-
-    public bool StockControl { get; set; } = true;
-
-    /// <summary>
-    /// Cuántas unidades cuenta cada venta de este producto en el recuento. Normalmente 1;
-    /// por ejemplo, un cupón de dos entradas cuenta como 2. No cambia el precio ni el stock,
-    /// y los suplementos y descuentos de visita se aplican una vez por producto vendido.
-    /// </summary>
-    public int CountsAs { get; set; } = 1;
-
-    /// <summary>
-    /// Solo cambia mediante movimientos de stock (entradas, salidas, ventas),
-    /// para que siempre quede registrado el description.
-    /// </summary>
-    public int Stock { get; set; }
-    public int MinStock { get; set; }
-
     public bool Active { get; set; } = true;
+    public decimal SalePrice { get; set; }    
     public DateTime RegistrationDate { get; set; }
 
-    public bool LowStock => StockControl && Stock <= MinStock;
+    public abstract ProductCategory Category { get; }
+    public virtual bool StockControl => false;
 
     public Product Clone() => (Product)MemberwiseClone();
+
+    public virtual void Normalize()
+    {
+        Name = Name?.Trim() ?? "";
+    }
+
+    public virtual void Validate()
+    {
+        if (Name.Length == 0)
+            throw new BusinessRuleException("El producto necesita un nombre.");
+        if (SalePrice < 0)
+            throw new BusinessRuleException("Los precios no pueden ser negativos.");
+    }
+
+    public virtual void CopyFrom(Product other)
+      {
+          Name = other.Name;
+          SalePrice = other.SalePrice;
+      }
 }

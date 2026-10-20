@@ -15,18 +15,25 @@ namespace QuickInventory.UI;
 /// </summary>
 public static class SalesExport
 {
-    private static readonly string[] Headers =
-        ["ID", "Fecha", "Hora", "Punto de venta", "Método de pago", "Productos", "Visita guiada", "Visita grupal", "Anulada", "Total"];
-
     /// <summary>
     /// CSV pensado para abrirlo con Excel en español: separado por ";", con coma decimal
-    /// y con BOM para que reconozca las tildes.
+    /// y con BOM para que reconozca las tildes. Lleva las columnas propias de todos los
+    /// tipos de venta; en las ventas a las que no aplican se quedan vacías.
     /// </summary>
     public static byte[] ToCsv(IEnumerable<Sale> sales)
     {
         var spanish = CultureInfo.GetCultureInfo("es-ES");
+        var saleFields = SaleTypes.AllFields;
+
+        string[] headers =
+        [
+            "ID", "Fecha", "Hora", "Punto de venta", "Método de pago", "Productos",
+            .. saleFields.Select(f => f.Header),
+            "Anulada", "Total",
+        ];
+
         var csv = new StringBuilder();
-        csv.AppendLine(string.Join(';', Headers.Select(Escape)));
+        csv.AppendLine(string.Join(';', headers.Select(Escape)));
 
         foreach (var sale in sales.OrderBy(s => s.SalesPoint).ThenBy(s => s.Date))
         {
@@ -38,8 +45,7 @@ public static class SalesExport
                 ActiveProfile.Name(sale.SalesPoint),
                 PaymentMethods.Name(sale.PaymentMethod),
                 Products(sale),
-                YesNo(sale.GuidedVisit),
-                YesNo(sale.GroupVisit),
+                .. saleFields.Select(f => f.Text(sale)),
                 YesNo(sale.Canceled),
                 sale.Total.ToString("0.00", spanish),
             ];
@@ -63,14 +69,10 @@ public static class SalesExport
         using var book = new XLWorkbook();
         AddSheet(book, null, [.. sales]);
 
-        // Taquilla y Tienda salen siempre, aunque no tengan ventas, para que el libro tenga
-        // siempre la misma forma. Admin no vende: solo sale si por algún motivo tiene ventas.
-        foreach (var salesPoint in Enum.GetValues<SalesPoint>())
-        {
-            var ofSalesPoint = sales.Where(s => s.SalesPoint == salesPoint).ToList();
-            if (salesPoint == SalesPoint.Admin && ofSalesPoint.Count == 0) continue;
-            AddSheet(book, salesPoint, ofSalesPoint);
-        }
+        // Una hoja por tipo de venta. Salen siempre, aunque no tengan ventas, para que el
+        // libro tenga siempre la misma forma.
+        foreach (var saleType in SaleTypes.All)
+            AddSheet(book, saleType, [.. sales.Where(s => s.SalesPoint == saleType.SalesPoint)]);
 
         AddRefundsSheet(book, [.. refunds], invoicePaths);
 
@@ -91,38 +93,34 @@ public static class SalesExport
 
     private const string EurosFormat = "#,##0.00 €";
 
-    private static void AddSheet(XLWorkbook book, SalesPoint? salesPoint, List<Sale> sales)
+    /// <param name="saleType">Tipo de venta de la hoja, o null para la hoja "Total" con todas.</param>
+    private static void AddSheet(XLWorkbook book, SaleType? saleType, List<Sale> sales)
     {
-        var sheet = book.Worksheets.Add(salesPoint!=null?ActiveProfile.Name((SalesPoint)salesPoint) :"Total");
+        var sheet = book.Worksheets.Add(saleType is null ? "Total" : ActiveProfile.Name(saleType.SalesPoint));
+
+        // La hoja de un tipo lleva solo sus columnas propias; la de "Total", las de todos.
+        var saleFields = saleType?.Fields ?? SaleTypes.AllFields;
 
         // Cada venta ocupa una fila con sus datos y su total, y debajo una fila por producto
-        // con el detalle del precio y del descuento. Las visitas guiadas y grupales solo
-        // tienen sentido en la taquilla.
+        // con el detalle del precio y del descuento.
         List<ExcelColumn> columns =
         [
             new("ID", s => s.Id, null),
             new("Fecha", s => s.Date.Date, null, "dd/mm/yyyy"),
             new("Hora", s => s.Date.ToString("HH:mm"), null),
             new("Método de pago", s => PaymentMethods.Name(s.PaymentMethod), null),
-        ];
-        if (salesPoint == SalesPoint.TicketOffice)
-        {
-            columns.Add(new("Visita guiada", s => YesNo(s.GuidedVisit), null));
-            columns.Add(new("Visita grupal", s => YesNo(s.GroupVisit), null));
-        }
-        columns.AddRange(
-        [
+            .. saleFields.Select(f => new ExcelColumn(f.Header, s => f.Text(s), null)),
             new("Anulada", s => YesNo(s.Canceled), null),
             new("Producto", s => Products(s), (_, l) => l.Description),
             new("Cantidad", s => s.Lines.Sum(l => l.Amount), (_, l) => l.Amount),
             // Unidades para el recuento: un cupón de 2 entradas vendido 3 veces son 6.
-            new(salesPoint == SalesPoint.TicketOffice ? "Entradas" : "Unidades contadas",
+            new(saleType?.CountedUnitsName ?? "Unidades contadas",
                 s => s.Lines.Sum(l => l.CountedUnits), (_, l) => l.CountedUnits),
             new("Precio", s => s.Lines.Sum(l => l.Amount * l.BasePrice), (_, l) => l.BasePrice, EurosFormat),
             new("Descuento", s => Discounts(s), (s, l) => Discount(s, l)),
             new("Descontado", s => s.Lines.Sum(l => l.DiscountTotal), (_, l) => l.DiscountTotal, EurosFormat),
             new("Total", s => s.Total, (_, l) => l.Subtotal, EurosFormat),
-        ]);
+        ];
 
         for (var column = 0; column < columns.Count; column++)
             sheet.Cell(1, column + 1).Value = columns[column].Header;
@@ -266,6 +264,7 @@ public static class SalesExport
 
     /// <summary>
     /// Descuentos aplicados a una línea, por ejemplo "RGCC/CNSO (-30 %) + Visita grupal (-0,50 €)".
+    /// Junta el descuento de la propia línea con los ajustes de su tipo de venta.
     /// Vacío si se cobró sin descuento.
     /// </summary>
     private static string Discount(Sale sale, SalesLine line)
@@ -273,8 +272,7 @@ public static class SalesExport
         List<string> discounts = [];
         if (line.DiscountName is not null)
             discounts.Add($"{line.DiscountName} (-{line.DiscountPercent:0.##} %)");
-        if (sale.GroupVisit)
-            discounts.Add($"Visita grupal (-{Sale.GroupVisitDiscount:C})");
+        discounts.AddRange(SaleTypes.Adjustments(sale));
         return string.Join(" + ", discounts);
     }
 

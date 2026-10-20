@@ -1,4 +1,28 @@
 @page "/tickets/sales"
+@inject ISalesService SalesService
 
+<SalesPanel SalesPoint="SalesPoint.TicketOffice" Title="Tickets"
+            UnitAdjustment="Adjustment" Register="Register" OnSaved="Reset">
+    <Options>
+        <MudSwitch @bind-Value="guidedVisit" Color="Color.Primary" Class="mt-4">
+            Visita guiada (+@TicketSale.GuidedVisitSupplement.ToString("C") por entrada)
+        </MudSwitch>
+        <MudSwitch @bind-Value="groupVisit" Color="Color.Primary" Class="mt-4">
+            Visita grupal (-@TicketSale.GroupVisitDiscount.ToString("C") por entrada)
+        </MudSwitch>
+    </Options>
+</SalesPanel>
 
-<SalesPanel SalesPoint="SalesPoint.TicketOffice" Title="Tickets" ShowVisitOptions="true" />
+@code {
+    private bool guidedVisit;
+    private bool groupVisit;
+
+    // El mismo cálculo que hace SalesService al guardar, para que el total coincida.
+    private decimal Adjustment =>
+        (guidedVisit ? TicketSale.GuidedVisitSupplement : 0) - (groupVisit ? TicketSale.GroupVisitDiscount : 0);
+
+    private Task Register(PaymentMethod method, IReadOnlyList<CartLine> cart) =>
+        SalesService.RegisterTicketSaleAsync(method, cart, guidedVisit, groupVisit);
+
+    private void Reset() => guidedVisit = groupVisit = false;
+}

@@ -10,7 +10,6 @@ public static class PaymentMethods
     {
         PaymentMethod.Cash => "Efectivo",
         PaymentMethod.Card => "Tarjeta",
-        PaymentMethod.Bizum => "Bizum",
         PaymentMethod.BankTransfer => "Transferencia",
         _ => paymentMethod.ToString()
     };
@@ -19,7 +18,6 @@ public static class PaymentMethods
     {
         PaymentMethod.Cash => Icons.Material.Filled.Payments,
         PaymentMethod.Card => Icons.Material.Filled.CreditCard,
-        PaymentMethod.Bizum => Icons.Material.Filled.PhoneAndroid,
         _ => Icons.Material.Filled.AccountBalance
     };
 

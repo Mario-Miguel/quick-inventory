@@ -1,0 +1,23 @@
+@* Datos propios de cada tipo de producto que se enseñan al vender (por ahora, "Cuenta como"). *@
+
+@if (Product is TicketProduct { CountsAs: > 1 } ticket)
+{
+    if (Amount is null)
+    {
+        <span class="counts-as-ticket">Cuenta como @ticket.CountsAs</span>
+    }
+    else
+    {
+        <MudText Typo="Typo.body2">Cuenta como @(Amount * ticket.CountsAs)</MudText>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Product Product { get; set; } = default!;
+
+    /// <summary>
+    /// Unidades de la línea de venta. Sin indicar, se muestra la etiqueta del botón del producto;
+    /// con ella, el total que cuenta la línea.
+    /// </summary>
+    [Parameter] public int? Amount { get; set; }
+}

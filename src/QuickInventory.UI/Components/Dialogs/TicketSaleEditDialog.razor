@@ -27,7 +27,7 @@
 @code {
     [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
 
-    [Parameter] public Sale Sale { get; set; } = new();
+    [Parameter] public Sale Sale { get; set; } = new TicketSale();
 
     // Se elige sobre una copia: si se cancela, la venta de la lista no cambia.
     private PaymentMethod paymentMethod;

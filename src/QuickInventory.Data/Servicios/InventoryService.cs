@@ -27,15 +27,16 @@ public sealed class InventoryService(IDbContextFactory<BaseDbContext> factory) :
 
     public async Task SaveProductAsync(Product product)
     {
-        Normalize(product);
-        Validate(product);
+        product.Normalize();
+        product.Validate();
 
         await using var db = await factory.CreateDbContextAsync();
 
-        if (product.BarCode is not null)
+        // Solo los productos de tienda tienen código de barras.
+        if (product is ShopProduct { BarCode: not null } shopProduct)
         {
-            var duplicated = await db.Products.AnyAsync(p =>
-                p.Active && p.Id != product.Id && p.BarCode == product.BarCode);
+            var duplicated = await db.Products.OfType<ShopProduct>().AnyAsync(p =>
+                p.Active && p.Id != shopProduct.Id && p.BarCode == shopProduct.BarCode);
             if (duplicated)
                 throw new BusinessRuleException("Ya hay otro producto con ese código de barras.");
         }
@@ -44,16 +45,15 @@ public sealed class InventoryService(IDbContextFactory<BaseDbContext> factory) :
         {
             product.RegistrationDate = DateTime.Now;
             product.Active = true;
-            if (!product.StockControl) product.Stock = 0;
 
             db.Products.Add(product);
 
-            if (product.StockControl && product.Stock > 0)
+            if (product is ShopProduct { Stock: > 0 } newShopProduct)
             {
                 db.StockMovements.Add(new StockMovement
                 {
-                    Product = product,
-                    Amount = product.Stock,
+                    Product = newShopProduct,
+                    Amount = newShopProduct.Stock,
                     Type = StockMovementType.Input,
                     Description = "Stock inicial",
                     Date = DateTime.Now
@@ -65,15 +65,11 @@ public sealed class InventoryService(IDbContextFactory<BaseDbContext> factory) :
             var existing = await db.Products.FindAsync(product.Id)
                 ?? throw new BusinessRuleException("El producto ya no existe.");
 
-            // El stock NO se copia: solo cambia con movimientos registrados.
-            existing.Name = product.Name;
-            existing.Category = product.Category;
-            existing.BarCode = product.BarCode;
-            existing.SalePrice = product.SalePrice;
-            existing.CostPrice = product.CostPrice;
-            existing.StockControl = product.StockControl;
-            existing.MinStock = product.MinStock;
-            existing.CountsAs = product.CountsAs;
+            if (existing.GetType() != product.GetType())
+                throw new BusinessRuleException(
+                    "No se puede cambiar el tipo de un producto. Dalo de baja y crea uno nuevo.");
+
+            existing.CopyFrom(product);
         }
 
         await db.SaveChangesAsync();
@@ -89,18 +85,14 @@ public sealed class InventoryService(IDbContextFactory<BaseDbContext> factory) :
         var product = await db.Products.FindAsync(productId)
             ?? throw new BusinessRuleException("El producto ya no existe.");
 
-        if (!product.StockControl)
+        if (product is not ShopProduct shopProduct)
             throw new BusinessRuleException("Este producto no lleva control de stock.");
 
-        if (product.Stock + amount < 0)
-            throw new BusinessRuleException(
-                $"No hay stock suficiente. Quedan {product.Stock} unidades de «{product.Name}».");
-
-        product.Stock += amount;
+        shopProduct.ChangeStock(amount);
 
         db.StockMovements.Add(new StockMovement
         {
-            ProductId = product.Id,
+            ProductId = shopProduct.Id,
             Amount = amount,
             Type = amount > 0 ? StockMovementType.Input : StockMovementType.Output,
             Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
@@ -121,21 +113,4 @@ public sealed class InventoryService(IDbContextFactory<BaseDbContext> factory) :
         await db.SaveChangesAsync();
     }
 
-    private static void Normalize(Product p)
-    {
-        p.Name = p.Name?.Trim() ?? "";
-        p.BarCode = string.IsNullOrWhiteSpace(p.BarCode) ? null : p.BarCode.Trim();
-    }
-
-    private static void Validate(Product p)
-    {
-        if (p.Name.Length == 0)
-            throw new BusinessRuleException("El producto necesita un nombre.");
-        if (p.SalePrice < 0 || p.CostPrice < 0)
-            throw new BusinessRuleException("Los precios no pueden ser negativos.");
-        if (p.Stock < 0 || p.MinStock < 0)
-            throw new BusinessRuleException("El stock no puede ser negativo.");
-        if (p.CountsAs < 1)
-            throw new BusinessRuleException("Cada producto tiene que contar como 1 unidad o más.");
-    }
 }
