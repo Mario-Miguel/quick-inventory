@@ -19,10 +19,12 @@ public static class Modules
         new("Cerrar caja", "Comprobación de la caja", Icons.Material.Filled.PointOfSale, "/tickets/close", TicketOfficeOnly),
         new("Cerrar caja", "Comprobación de la caja", Icons.Material.Filled.PointOfSale, "/shop/close", ShopOnly),
         new("Resumen de ventas", "Ver ventas de la taquilla", Icons.Material.Filled.ListAlt, "/tickets/summary", TicketOfficeOnly),
+        new("Entradas online", "Entradas compradas en la web, por día y hora", Icons.Material.Filled.CalendarMonth, "/tickets/online", TicketOfficeOnly),
         new("Resumen de ventas", "Ver ventas de la tienda", Icons.Material.Filled.ListAlt, "/shop/summary", ShopOnly),
         new("Inventario", "Productos, precios y unidades en almacén", Icons.Material.Filled.Inventory2, "/inventory", AdminOnly),
         new("Reembolsos", "Devolver a un trabajador lo que pagó con factura", Icons.Material.Filled.ReceiptLong, "/refunds", AdminOnly),
         new("Exportar datos", "Exportar datos de las ventas del mes", Icons.Material.Filled.Download, "/export", AdminOnly),
+        new("Tienda online", "Conexión con la tienda web (PrestaShop)", Icons.Material.Filled.Language, "/online-shop", AdminOnly),
     ];
 
     public static IEnumerable<Module> For(SalesPoint profile) => All.Where(m => m.Profiles.Contains(profile));

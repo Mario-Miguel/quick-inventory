@@ -15,6 +15,7 @@ public static class DataConfiguration
         services.AddScoped<IInventoryService, InventoryService>();
         services.AddScoped<ISalesService, SalesService>();
         services.AddScoped<IRefundService, RefundService>();
+        services.AddScoped<IOnlineTicketService, PrestaShopTicketService>();
         return services;
     }
 
@@ -34,6 +35,9 @@ public static class DataConfiguration
         db.Database.EnsureCreated();
 
         if (db.Products.Any()) return;
+
+        // Entradas online de ejemplo hasta que se configure la tienda de verdad (Admin → Tienda online).
+        db.OnlineShopSettings.Add(new OnlineShopSettings { Url = OnlineShopSettings.DemoUrl });
 
         var t0 = DateTime.Now;
         var examples = new List<Product>

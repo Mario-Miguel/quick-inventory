@@ -1,0 +1,242 @@
+@page "/tickets/online"
+@inject IOnlineTicketService OnlineTicketService
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    <h1 class="page-title mb-0">Entradas online</h1>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.Refresh" OnClick="Load" Disabled="loading">
+        Actualizar
+    </MudButton>
+</div>
+
+<MudText Class="mb-4">
+    Entradas compradas en la página web para cada día. Pulsa un día para ver cuántas hay en cada hora.
+</MudText>
+
+@* Selector de mes: flechas grandes, como en Reembolsos. *@
+<div class="d-flex align-center flex-wrap gap-2 mb-4">
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Variant="Variant.Outlined" Size="Size.Large"
+                   OnClick="() => ChangeMonth(-1)" aria-label="Mes anterior" />
+    <MudText Typo="Typo.h6" Class="export-month">@month.ToString("MMMM 'de' yyyy")</MudText>
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Variant="Variant.Outlined" Size="Size.Large"
+                   OnClick="() => ChangeMonth(1)" aria-label="Mes siguiente" />
+    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Large" Class="ml-2"
+               OnClick="GoToToday" Disabled="@(selected == Today)">
+        Hoy
+    </MudButton>
+</div>
+
+@if (loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+
+@if (demo)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        Son <b>entradas de ejemplo</b>, no ventas reales. Para ver las de la tienda, configura la conexión
+        desde el perfil Admin, en «Tienda online».
+    </MudAlert>
+}
+
+@if (error is not null)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4">@error</MudAlert>
+}
+
+<MudGrid Spacing="6">
+    @* Izquierda: el mes. Cada día muestra cuántas entradas tiene; cuantas más, más intenso el color. *@
+    <MudItem xs="12" md="7">
+        <div class="calendar">
+            @foreach (var weekday in Weekdays)
+            {
+                <div class="calendar-weekday">@weekday</div>
+            }
+            @foreach (var day in CalendarDays)
+            {
+                if (day.Month != month.Month)
+                {
+                    <div class="calendar-day calendar-day-outside"></div>
+                    continue;
+                }
+                var count = ticketsByDay.GetValueOrDefault(day);
+                <button type="button" class="@DayClass(day)" style="@DayStyle(count)" @onclick="() => selected = day"
+                        aria-label="@($"{day:dddd d}: {count} entradas")">
+                    <span class="calendar-day-number">@day.Day</span>
+                    @if (count > 0)
+                    {
+                        <span class="calendar-day-count">@count</span>
+                    }
+                </button>
+            }
+        </div>
+
+        @if (undated.Count > 0)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-4">
+                Hay @undated.Sum(t => t.Quantity) entradas compradas este mes en las que no aparece el día
+                de la visita. No salen en el calendario.
+            </MudAlert>
+            <MudExpansionPanels Outlined="true" Class="mt-2">
+                <MudExpansionPanel Text="Ver esas entradas">
+                    <TicketLinesTable Tickets="undated" ShowOrderDate="true" />
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        }
+    </MudItem>
+
+    @* Derecha: el día elegido, con las entradas por hora y por tipo. *@
+    <MudItem xs="12" md="5">
+        <MudPaper Class="pa-4" Outlined="true">
+            <MudText Typo="Typo.h6" Class="header-date">@selected.ToString("dddd, d 'de' MMMM")</MudText>
+            <MudText Typo="Typo.h4" Class="mb-4"><b>@SelectedTickets.Sum(t => t.Quantity)</b> entradas</MudText>
+
+            @if (SelectedTickets.Count == 0)
+            {
+                <MudText>No hay entradas compradas online para este día.</MudText>
+            }
+            else
+            {
+                <div class="online-hours">
+                    <MudSimpleTable Dense="true" Outlined="true" Hover="true">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                @foreach (var type in SelectedTypes)
+                                {
+                                    <th style="text-align:right">@type</th>
+                                }
+                                <th style="text-align:right">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var hour in SelectedTickets.GroupBy(t => t.VisitTime)
+                                          .OrderBy(g => g.Key is null).ThenBy(g => g.Key))
+                            {
+                                <tr>
+                                    <td class="product-name">@(hour.Key?.ToString("HH:mm") ?? "Sin hora")</td>
+                                    @foreach (var type in SelectedTypes)
+                                    {
+                                        <td style="text-align:right">@Blank(hour.Where(t => t.Type == type).Sum(t => t.Quantity))</td>
+                                    }
+                                    <td style="text-align:right"><b>@hour.Sum(t => t.Quantity)</b></td>
+                                </tr>
+                            }
+                            <tr class="online-hours-total">
+                                <td>Total</td>
+                                @foreach (var type in SelectedTypes)
+                                {
+                                    <td style="text-align:right">@SelectedTickets.Where(t => t.Type == type).Sum(t => t.Quantity)</td>
+                                }
+                                <td style="text-align:right">@SelectedTickets.Sum(t => t.Quantity)</td>
+                            </tr>
+                        </tbody>
+                    </MudSimpleTable>
+                </div>
+
+                <MudText Typo="Typo.subtitle1" Class="mt-6 mb-2"><b>Pedidos</b></MudText>
+                <TicketLinesTable Tickets="SelectedTickets" />
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private static readonly string[] Weekdays = ["L", "M", "X", "J", "V", "S", "D"];
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    /// <summary>Primer día del mes que se ve en el calendario.</summary>
+    private DateOnly month = new(Today.Year, Today.Month, 1);
+    private DateOnly selected = Today;
+
+    private List<OnlineTicket> tickets = [];
+    /// <summary>Entradas en las que no se ha encontrado el día de la visita (se compraron este mes).</summary>
+    private List<OnlineTicket> undated = [];
+    private Dictionary<DateOnly, int> ticketsByDay = [];
+    private int maxPerDay;
+
+    private bool loading;
+    /// <summary>La tienda está configurada como "demo": se avisa de que los datos no son reales.</summary>
+    private bool demo;
+    private string? error;
+    /// <summary>Cuenta las cargas: si se cambia de mes rápido, solo se muestra la última.</summary>
+    private int loadNumber;
+
+    private List<OnlineTicket> SelectedTickets =>
+        tickets.Where(t => t.VisitDay == selected).OrderBy(t => t.VisitTime).ThenBy(t => t.OrderId).ToList();
+
+    private List<string> SelectedTypes => SelectedTickets.Select(t => t.Type).Distinct().Order().ToList();
+
+    /// <summary>Semanas completas, de lunes a domingo, que contienen el mes.</summary>
+    private IEnumerable<DateOnly> CalendarDays
+    {
+        get
+        {
+            var start = month.AddDays(-(((int)month.DayOfWeek + 6) % 7));
+            var days = (int)Math.Ceiling((month.DayNumber - start.DayNumber + DateTime.DaysInMonth(month.Year, month.Month)) / 7.0) * 7;
+            return Enumerable.Range(0, days).Select(start.AddDays);
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task ChangeMonth(int months)
+    {
+        month = month.AddMonths(months);
+        selected = month.Year == Today.Year && month.Month == Today.Month ? Today : month;
+        await Load();
+    }
+
+    private async Task GoToToday()
+    {
+        var reload = month.Year != Today.Year || month.Month != Today.Month;
+        month = new DateOnly(Today.Year, Today.Month, 1);
+        selected = Today;
+        if (reload) await Load();
+    }
+
+    private async Task Load()
+    {
+        var number = ++loadNumber;
+        loading = true;
+        error = null;
+        try
+        {
+            demo = (await OnlineTicketService.GetSettingsAsync()).IsDemo;
+            var result = await OnlineTicketService.GetTicketsAsync(month, month.AddMonths(1).AddDays(-1));
+            if (number != loadNumber) return;
+            tickets = result.Where(t => t.VisitDay is not null).ToList();
+            undated = result.Where(t => t.VisitDay is null).OrderBy(t => t.OrderDate).ToList();
+        }
+        catch (BusinessRuleException ex)
+        {
+            if (number != loadNumber) return;
+            (tickets, undated, error) = ([], [], ex.Message);
+        }
+        catch (Exception)
+        {
+            if (number != loadNumber) return;
+            (tickets, undated, error) = ([], [], "No se han podido leer las entradas de la tienda online. Inténtalo de nuevo.");
+        }
+        finally
+        {
+            if (number == loadNumber) loading = false;
+        }
+
+        ticketsByDay = tickets.GroupBy(t => t.VisitDay!.Value).ToDictionary(g => g.Key, g => g.Sum(t => t.Quantity));
+        maxPerDay = ticketsByDay.Count == 0 ? 0 : ticketsByDay.Values.Max();
+    }
+
+    private string DayClass(DateOnly day) =>
+        "calendar-day"
+        + (day == selected ? " calendar-day-selected" : "")
+        + (day == Today ? " calendar-day-today" : "");
+
+    // Fondo ámbar más intenso cuantas más entradas tenga el día respecto al día con más del mes.
+    private string? DayStyle(int count) =>
+        count == 0 ? null : $"background-color: color-mix(in srgb, var(--mud-palette-secondary) {10 + 40 * count / maxPerDay}%, #fff)";
+
+    private static string Blank(int number) => number == 0 ? "" : number.ToString();
+}
