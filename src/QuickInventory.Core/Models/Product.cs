@@ -37,18 +37,21 @@ public sealed record ProductCategory
 
 /// <summary>
 /// Cualquier cosa que el museo vende: artículos de tienda, bebidas, entradas...
-/// Las entradas y los servicios no controlan stock (StockControl = false).
 /// </summary>
 public abstract class Product
 {
     public int Id { get; set; }
     public string Name { get; set; } = "";
     public bool Active { get; set; } = true;
-    public decimal SalePrice { get; set; }    
+    public decimal SalePrice { get; set; }
     public DateTime RegistrationDate { get; set; }
 
     public abstract ProductCategory Category { get; }
-    public virtual bool StockControl => false;
+    // public virtual bool StockControl => false;
+
+    /// <summary>Producto nuevo y vacío de la clase que corresponde a la categoría.</summary>
+    public static Product New(ProductCategory category) =>
+        category == ProductCategory.Ticket ? new TicketProduct() : new ShopProduct();
 
     public Product Clone() => (Product)MemberwiseClone();
 
@@ -66,8 +69,8 @@ public abstract class Product
     }
 
     public virtual void CopyFrom(Product other)
-      {
-          Name = other.Name;
-          SalePrice = other.SalePrice;
-      }
+    {
+        Name = other.Name;
+        SalePrice = other.SalePrice;
+    }
 }

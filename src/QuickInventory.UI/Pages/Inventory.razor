@@ -6,10 +6,7 @@
 <div class="d-flex align-center flex-wrap gap-4 mb-4">
     <h1 class="page-title mb-0">Inventario</h1>
     <MudSpacer />
-    <MudButton Variant="Variant.Filled"
-               Color="Color.Primary"
-               Size="Size.Large"
-               StartIcon="@Icons.Material.Filled.Add"
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" StartIcon="@Icons.Material.Filled.Add"
                OnClick="NewProduct">
         Nuevo producto
     </MudButton>
@@ -22,33 +19,19 @@
 else
 {
     <MudPaper Class="pa-4 mb-4 d-flex flex-wrap align-center gap-4" Elevation="0" Outlined="true">
-        <MudTextField T="string"
-                      @bind-Value="searching"
-                      Placeholder="Buscar por nombre, categoría o código de barras"
-                      Adornment="Adornment.Start"
-                      AdornmentIcon="@Icons.Material.Filled.Search"
-                      Immediate="true"
-                      Clearable="true"
-                      AutoFocus="true"
-                      Variant="Variant.Outlined"
-                      Class="finder" />
-        <MudSwitch T="bool"
-                   @bind-Value="lowStockOnly"
-                   Color="Color.Warning"
+        <MudTextField T="string" @bind-Value="searching" Placeholder="Buscar por nombre, categoría o código de barras"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true"
+                      AutoFocus="true" Variant="Variant.Outlined" Class="finder" />
+        <MudSwitch T="bool" @bind-Value="lowStockOnly" Color="Color.Warning"
                    Label="@($"Solo stock bajo ({LowStockNum})")" />
     </MudPaper>
 
-    <MudTable T="Product"
-              Items="products"
-              Filter="new Func<Product, bool>(Filter)"
-              Hover="true"
-              Striped="true"
-              Elevation="1"
-              RowsPerPage="25"
-              Breakpoint="Breakpoint.Sm">
+    <MudTable T="Product" Items="products" Filter="new Func<Product, bool>(Filter)" Hover="true" Striped="true"
+              Elevation="1" RowsPerPage="25" Breakpoint="Breakpoint.Sm">
         <HeaderContent>
             <MudTh>
-                <MudTableSortLabel T="Product" SortBy="p => p.Name" InitialDirection="SortDirection.Ascending">Producto</MudTableSortLabel>
+                <MudTableSortLabel T="Product" SortBy="p => p.Name" InitialDirection="SortDirection.Ascending">Producto
+                </MudTableSortLabel>
             </MudTh>
             <MudTh>
                 <MudTableSortLabel T="Product" SortBy="p => p.Category.Name">Categoría</MudTableSortLabel>
@@ -57,61 +40,58 @@ else
                 <MudTableSortLabel T="Product" SortBy="p => p.SalePrice">Precio</MudTableSortLabel>
             </MudTh>
             <MudTh Style="text-align:right">
-                <MudTableSortLabel T="Product" SortBy="p => p.Stock">Stock</MudTableSortLabel>
+                <MudTableSortLabel T="Product" SortBy="p => p is ShopProduct shopProduct ? shopProduct.Stock : 0">Stock
+                </MudTableSortLabel>
             </MudTh>
             <MudTh Style="text-align:right">Acciones</MudTh>
         </HeaderContent>
 
         <RowTemplate>
-            <MudTd DataLabel="Product">
+            <MudTd DataLabel="Producto">
                 <div class="product-name">@context.Name</div>
-                @if (context.CountsAs > 1)
+                @if (context is TicketProduct { CountsAs: > 1 } ticketProduct)
                 {
-                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Class="ml-0">Cuenta como @context.CountsAs</MudChip>
+                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Class="ml-0">
+                        Cuenta como @ticketProduct.CountsAs
+                    </MudChip>
                 }
-                @if (context.BarCode is not null)
+                @if (context is ShopProduct { BarCode: not null } shopProduct)
                 {
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.BarCode</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@shopProduct.BarCode</MudText>
                 }
             </MudTd>
             <MudTd DataLabel="Categoría">@context.Category.Name</MudTd>
             <MudTd DataLabel="Precio" Style="text-align:right">@context.SalePrice.ToString("C")</MudTd>
             <MudTd DataLabel="Stock" Style="text-align:right">
-                @if (!context.StockControl)
+                @switch (context)
                 {
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary">No aplica</MudText>
-                }
-                else if (context.LowStock)
-                {
-                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.Warning">
-                        @context.Stock
-                    </MudChip>
-                }
-                else
-                {
-                    @context.Stock
+                    case ShopProduct { LowStock: true } shopProduct:
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.Warning">
+                            @shopProduct.Stock
+                        </MudChip>
+                        break;
+                    case ShopProduct shopProduct:
+                        @shopProduct.Stock
+                        break;
+                    default:
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">No aplica</MudText>
+                        break;
                 }
             </MudTd>
             <MudTd Style="text-align:right; white-space:nowrap">
-                @if (context.StockControl)
+                @if (context is ShopProduct shopProduct)
                 {
-                    <MudTooltip Text="Input o salida de unidades">
-                        <MudIconButton Icon="@Icons.Material.Filled.SwapVert"
-                                       Color="Color.Primary"
-                                       OnClick="() => AdjustStock(context)"
-                                       aria-label="Ajustar stock" />
+                    <MudTooltip Text="Entrada o salida de unidades">
+                        <MudIconButton Icon="@Icons.Material.Filled.SwapVert" Color="Color.Primary"
+                                       OnClick="() => AdjustStock(shopProduct)" aria-label="Ajustar stock" />
                     </MudTooltip>
                 }
                 <MudTooltip Text="Editar">
-                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                                   OnClick="() => Edit(context)"
-                                   aria-label="Editar" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" OnClick="() => Edit(context)" aria-label="Editar" />
                 </MudTooltip>
                 <MudTooltip Text="Dar de baja">
-                    <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
-                                   Color="Color.Error"
-                                   OnClick="() => Unsuscribe(context)"
-                                   aria-label="Dar de baja" />
+                    <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error"
+                                   OnClick="() => Unsuscribe(context)" aria-label="Dar de baja" />
                 </MudTooltip>
             </MudTd>
         </RowTemplate>
@@ -121,8 +101,7 @@ else
         </NoRecordsContent>
 
         <PagerContent>
-            <MudTablePager RowsPerPageString="Filas por página:"
-                           InfoFormat="{first_item}-{last_item} de {all_items}" />
+            <MudTablePager RowsPerPageString="Filas por página:" InfoFormat="{first_item}-{last_item} de {all_items}" />
         </PagerContent>
     </MudTable>
 }
@@ -132,7 +111,7 @@ else
     private string searching = "";
     private bool lowStockOnly;
 
-    private int LowStockNum => products?.Count(p => p.LowStock) ?? 0;
+    private int LowStockNum => products?.Count(p => p is ShopProduct { LowStock: true }) ?? 0;
 
     private static readonly DialogOptions CustomDialogOptions = new()
     {
@@ -147,13 +126,14 @@ else
     // Búsqueda sin distinguir mayúsculas ni tildes ("camiseta" encuentra "Camiseta").
     private bool Filter(Product p)
     {
-        if (lowStockOnly && !p.LowStock) return false;
+        // Las entradas no llevan stock: con el filtro activado no salen.
+        if (lowStockOnly && p is not ShopProduct { LowStock: true }) return false;
         if (string.IsNullOrWhiteSpace(searching)) return true;
 
         var texto = searching.Trim();
         return Contains(p.Name, texto)
             || Contains(p.Category.Name, texto)
-            || Contains(p.BarCode, texto);
+            || Contains(p is ShopProduct shopProduct ? shopProduct.BarCode : "", texto);
     }
 
     private static bool Contains(string? origin, string text) =>
@@ -161,7 +141,8 @@ else
         CultureInfo.CurrentCulture.CompareInfo.IndexOf(
             origin, text, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0;
 
-    private Task NewProduct() => OpenEditor(new Product(), "Nuevo producto");
+    // Por defecto, artículo de tienda; en el diálogo se puede cambiar a entrada.
+    private Task NewProduct() => OpenEditor(new ShopProduct(), "Nuevo producto");
 
     // Se edita una copia: si el usuario cancela, la tabla no cambia.
     private Task Edit(Product p) => OpenEditor(p.Clone(), "Editar producto");
@@ -171,17 +152,18 @@ else
         var parameters = new DialogParameters<ProductDialog> { { x => x.Product, product } };
         var dialog = await Dialogs.ShowAsync<ProductDialog>(titulo, parameters, CustomDialogOptions);
         var result = await dialog.Result;
-        if (result is null || result.Canceled) return;
+        if (result is not { Canceled: false, Data: Product saved }) return;
 
         await Execute(
-            () => InventoryService.SaveProductAsync(product),
-            $"«{product.Name}» guardado.");
+            () => InventoryService.SaveProductAsync(saved),
+            $"«{saved.Name}» guardado.");
     }
 
-    private async Task AdjustStock(Product product)
+    private async Task AdjustStock(ShopProduct product)
     {
         var parameters = new DialogParameters<StockAdjustDialog> { { x => x.Product, product } };
-        var dialog = await Dialogs.ShowAsync<StockAdjustDialog>("Input o salida de stock", parameters, CustomDialogOptions);
+        var dialog = await Dialogs.ShowAsync<StockAdjustDialog>("Entrada o salida de unidades", parameters,
+CustomDialogOptions);
         var result = await dialog.Result;
         if (result is null || result.Canceled || result.Data is not StockAdjust adjust) return;
 

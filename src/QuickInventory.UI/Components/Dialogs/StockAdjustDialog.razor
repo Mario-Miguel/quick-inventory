@@ -11,7 +11,7 @@
                        FullWidth="true"
                        StartIcon="@Icons.Material.Filled.Add"
                        OnClick="() => isInput = true">
-                Input
+                Entrada
             </MudButton>
             <MudButton Variant="@(!isInput ? Variant.Filled : Variant.Outlined)"
                        Color="Color.Error"
@@ -19,21 +19,21 @@
                        FullWidth="true"
                        StartIcon="@Icons.Material.Filled.Remove"
                        OnClick="() => isInput = false">
-                Output
+                Salida
             </MudButton>
         </div>
 
         <MudStack Spacing="3">
             <MudNumericField T="int"
                              @bind-Value="amount"
-                             Label="Amount"
+                             Label="Cantidad"
                              Min="1"
                              AutoFocus="true"
                              Variant="Variant.Outlined" />
 
             <MudTextField T="string"
                           @bind-Value="description"
-                          Label="Description (opcional)"
+                          Label="Motivo (opcional)"
                           Placeholder="@(isInput ? "Ej.: pedido al proveedor" : "Ej.: rotura, regalo institucional")"
                           Variant="Variant.Outlined" />
 
@@ -64,7 +64,7 @@
 @code {
     [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
 
-    [Parameter] public Product Product { get; set; } = new();
+    [Parameter, EditorRequired] public ShopProduct Product { get; set; } = default!;
 
     private bool isInput = true;
     private int amount = 1;
