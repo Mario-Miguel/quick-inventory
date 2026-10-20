@@ -28,7 +28,6 @@ internal sealed class PrestaShopDemoHandler : HttpMessageHandler
         var query = Query(request.RequestUri!);
         IEnumerable<Order> orders = AllOrders();
 
-        // filter[date_add]=[2026-06-01 00:00:00,2026-10-31 23:59:59]
         if (query.TryGetValue("filter[date_add]", out var interval))
         {
             var limits = interval.Trim('[', ']').Split(',');
