@@ -5,4 +5,7 @@
     <Project Path="src/QuickInventory.Core/QuickInventory.Core.csproj" />
     <Project Path="src/QuickInventory.Data/QuickInventory.Data.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/QuickInventory.Core.Tests/QuickInventory.Core.Tests.csproj" />
+  </Folder>
 </Solution>

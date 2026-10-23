@@ -23,6 +23,7 @@ public static class Modules
         new("Inventario", "Productos, precios y unidades en almacén", Icons.Material.Filled.Inventory2, "/inventory", AdminOnly),
         new("Reembolsos", "Devolver a un trabajador lo que pagó con factura", Icons.Material.Filled.ReceiptLong, "/refunds", AdminOnly),
         new("Exportar datos", "Exportar datos de las ventas del mes", Icons.Material.Filled.Download, "/export", AdminOnly),
+        new("Datos del titular", "Nombre, NIF y dirección que salen en los tickets", Icons.Material.Filled.Business, "/issuer", AdminOnly),
     ];
 
     public static IEnumerable<Module> For(SalesPoint profile) => All.Where(m => m.Profiles.Contains(profile));

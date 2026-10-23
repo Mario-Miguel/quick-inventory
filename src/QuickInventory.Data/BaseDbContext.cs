@@ -12,12 +12,17 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
     public DbSet<SalesLine> SaleLines => Set<SalesLine>();
     public DbSet<CashMovement> CashMovements => Set<CashMovement>();
     public DbSet<InvoiceFile> InvoiceFiles => Set<InvoiceFile>();
+    public DbSet<Issuer> Issuers => Set<Issuer>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configuration)
     {
-        // SQLite no tiene tipo decimal: guardamos los importes como céntimos enteros.
-        // Así no hay errores de redondeo y se pueden ordenar y filtrar en la base de datos.
+        // Los importes se guardan como céntimos enteros: no hay errores de redondeo
+        // y no dependemos del tipo decimal de cada base de datos.
         configuration.Properties<decimal>().HaveConversion<AmountInCentsConverter>();
+
+        // Las fechas son horas locales del museo (DateTime.Now), sin huso horario.
+        // Sin esto, PostgreSQL usaría "timestamp with time zone" y exigiría fechas en UTC.
+        configuration.Properties<DateTime>().HaveColumnType("timestamp without time zone");
 
         // Los enums se guardan como texto ("Cash", "Card"...) para que la base
         // de datos se entienda si alguien la abre con otra herramienta.
@@ -81,6 +86,14 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
             e.Property(f => f.FileName).HasMaxLength(260).IsRequired();
             e.Property(f => f.ContentType).HasMaxLength(100);
             e.HasOne<CashMovement>().WithOne().HasForeignKey<InvoiceFile>(f => f.CashMovementId);
+        });
+
+        // Una sola fila: la crea el asistente de la primera instalación.
+        model.Entity<Issuer>(e =>
+        {
+            e.Property(i => i.Nif).HasMaxLength(9).IsRequired();
+            e.Property(i => i.LegalName).HasMaxLength(120).IsRequired();
+            e.Property(i => i.Address).HasMaxLength(300);
         });
     }
 }

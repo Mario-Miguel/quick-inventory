@@ -11,11 +11,18 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.*" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\QuickInventory.UI\QuickInventory.UI.csproj" />
     <ProjectReference Include="..\QuickInventory.Data\QuickInventory.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Conexión por defecto (PostgreSQL local de desarrollo). Se cambia sin recompilar: ver App.xaml.cs. -->
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

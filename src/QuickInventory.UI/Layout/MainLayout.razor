@@ -2,6 +2,8 @@
 @implements IDisposable
 @inject NavigationManager Navigation
 @inject ActiveProfile Profile
+@inject IConnectionStatus Connection
+@inject IIssuerService IssuerService
 
 <MudThemeProvider Theme="Theme.Museo" />
 <MudPopoverProvider />
@@ -21,7 +23,7 @@
         <MudText Typo="Typo.h6" Class="ml-2">Museo de la Sidra</MudText>
         <MudSpacer />
         @* Cambio de perfil: sin contraseña, basta con elegir el otro. *@
-        <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="mr-4">
+        <MudMenu Disabled="@(setup != SetupState.Done)" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="mr-4">
             <ActivatorContent>
                 <MudButton Variant="Variant.Outlined"
                            Color="Color.Inherit"
@@ -48,18 +50,86 @@
 
     <MudMainContent Class="pt-16">
         <MudContainer MaxWidth="MaxWidth.Large" Class="py-6">
-            @Body
+            @switch (setup)
+            {
+                case SetupState.Unknown:
+                    <MudProgressCircular Indeterminate="true" />
+                    break;
+                case SetupState.Pending:
+                    <FirstRunWizard OnFinished="SetupFinished" />
+                    break;
+                default:
+                    @Body
+                    break;
+            }
         </MudContainer>
     </MudMainContent>
 </MudLayout>
 
+@* Sin conexión con la base de datos no se puede trabajar: se tapa todo hasta que vuelva. *@
+<MudOverlay Visible="@(!Connection.Connected)" DarkBackground="true" ZIndex="2000">
+    <MudPaper Class="pa-8 connection-lost" Elevation="4">
+        <MudIcon Icon="@Icons.Material.Filled.CloudOff" Color="Color.Error" Class="connection-lost-icon" />
+        <MudText Typo="Typo.h5" Class="mt-2 mb-4">Sin conexión con el servidor</MudText>
+        <MudText Typo="Typo.body1" Class="mb-2">No se pueden hacer ventas ni cambios.</MudText>
+        <MudText Typo="Typo.body1" Class="mb-6">
+            Si estabas cobrando, la venta <b>no</b> se ha registrado: no entregues el ticket.
+            La aplicación se desbloqueará sola cuando vuelva la conexión.
+        </MudText>
+        <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Refresh" Disabled="retrying" OnClick="Retry">
+            Reintentar
+        </MudButton>
+    </MudPaper>
+</MudOverlay>
+
 @code {
+    private enum SetupState { Unknown, Pending, Done }
+
+    private SetupState setup;
+    private bool retrying;
+
     private bool InHomepage => Navigation.ToBaseRelativePath(Navigation.Uri).Trim('/').Length == 0;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         Navigation.LocationChanged += OnNavigation;
         Profile.Changed += OnProfileChanged;
+        Connection.Changed += OnConnectionChanged;
+        await CheckSetup();
+    }
+
+    /// <summary>Sin datos del titular hay que pasar antes por el asistente de la primera instalación.</summary>
+    private async Task CheckSetup()
+    {
+        try
+        {
+            setup = await IssuerService.GetIssuerAsync() is null ? SetupState.Pending : SetupState.Done;
+        }
+        catch (Exception)
+        {
+            // Sin conexión: se vuelve a mirar cuando vuelva (OnConnectionChanged).
+            setup = SetupState.Unknown;
+        }
+    }
+
+    private void SetupFinished()
+    {
+        setup = SetupState.Done;
+        Navigation.NavigateTo("/");
+    }
+
+    private void OnConnectionChanged() => InvokeAsync(async () =>
+    {
+        if (Connection.Connected && setup == SetupState.Unknown) await CheckSetup();
+        StateHasChanged();
+    });
+
+    private async Task Retry()
+    {
+        retrying = true;
+        await Connection.CheckAsync();
+        retrying = false;
     }
 
     private void OnNavigation(object? sender, LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
@@ -76,5 +146,6 @@
     {
         Navigation.LocationChanged -= OnNavigation;
         Profile.Changed -= OnProfileChanged;
+        Connection.Changed -= OnConnectionChanged;
     }
 }

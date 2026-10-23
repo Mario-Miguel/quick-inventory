@@ -1,0 +1,108 @@
+@* Asistente de la primera instalación: se muestra en lugar de la aplicación hasta que hay datos del titular. *@
+@inject IIssuerService IssuerService
+@inject ISnackbar Warnings
+
+<MudPaper Class="pa-8 mx-auto first-run" Outlined="true">
+    <MudText Typo="Typo.body1" Class="mud-text-secondary mb-2">Paso @(step + 1) de @Steps</MudText>
+    <MudProgressLinear Value="@((step + 1) * 100.0 / Steps)" Color="Color.Primary" Class="mb-6" />
+
+    @switch (step)
+    {
+        case 0:
+            <h1 class="page-title">Bienvenido</h1>
+            <MudText Typo="Typo.body1" Class="mb-2">
+                Es la primera vez que se abre la aplicación con esta base de datos. Antes de empezar
+                hay que apuntar quién es el <b>titular</b> del museo: la persona, empresa o entidad que vende
+                y que aparecerá en los tickets.
+            </MudText>
+            <MudText Typo="Typo.body1">
+                Solo hace falta hacerlo una vez. Si luego hay que cambiar algo, se puede hacer desde
+                el perfil Admin, en «Datos del titular».
+            </MudText>
+            break;
+
+        case 1:
+            <h1 class="page-title">Datos del titular</h1>
+            <IssuerForm @ref="issuerForm" Issuer="issuer" />
+            break;
+
+        case 2:
+            <h1 class="page-title">Comprueba los datos</h1>
+            <MudSimpleTable Outlined="true" Class="mb-4">
+                <tbody>
+                    <tr><th>Nombre o razón social</th><td>@issuer.LegalName</td></tr>
+                    <tr><th>NIF</th><td>@issuer.Nif</td></tr>
+                    <tr><th>Dirección</th><td>@(issuer.Address ?? "—")</td></tr>
+                </tbody>
+            </MudSimpleTable>
+            <MudText Typo="Typo.body1">Si está todo bien, pulsa «Terminar» para empezar a usar la aplicación.</MudText>
+            break;
+    }
+
+    <div class="d-flex justify-space-between mt-8">
+        <MudButton Size="Size.Large" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack"
+                   Disabled="@(step == 0 || saving)" OnClick="Previous">
+            Atrás
+        </MudButton>
+        @if (step < Steps - 1)
+        {
+            <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary"
+                       EndIcon="@Icons.Material.Filled.ArrowForward" OnClick="Next">
+                Siguiente
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Check" Disabled="saving" OnClick="Finish">
+                Terminar
+            </MudButton>
+        }
+    </div>
+</MudPaper>
+
+@code {
+    /// <summary>Se llama cuando los datos ya están guardados.</summary>
+    [Parameter] public EventCallback OnFinished { get; set; }
+
+    private const int Steps = 3;
+
+    private readonly Issuer issuer = new();
+    private IssuerForm? issuerForm;
+    private int step;
+    private bool saving;
+
+    private async Task Next()
+    {
+        if (step == 1)
+        {
+            if (issuerForm is null || !await issuerForm.ValidateAsync()) return;
+            issuer.Normalize();
+        }
+        step++;
+    }
+
+    private void Previous() => step--;
+
+    private async Task Finish()
+    {
+        saving = true;
+        try
+        {
+            await IssuerService.SaveIssuerAsync(issuer);
+            await OnFinished.InvokeAsync();
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se han podido guardar los datos. Inténtalo de nuevo.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

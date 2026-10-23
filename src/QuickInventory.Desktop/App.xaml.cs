@@ -2,8 +2,10 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
+using QuickInventory.Core;
 using QuickInventory.Data;
 using QuickInventory.UI;
 
@@ -24,16 +26,18 @@ public partial class App : Application
 
         DispatcherUnhandledException += UnhandledErrorHappens;
 
-        var services = ConfigureServices();
-
+        IServiceProvider services;
         try
         {
+            services = ConfigureServices(LoadConfiguration());
             DataConfiguration.InitDatabase(services);
         }
         catch (Exception ex)
         {
+            // Los errores previstos (sin conexión, contraseña...) ya traen un mensaje para el usuario.
+            var reason = ex is BusinessRuleException ? ex.Message : $"No se ha podido abrir la base de datos.\n\n{ex.Message}";
             MessageBox.Show(
-                $"No se ha podido abrir la base de datos.\n\n{ex.Message}",
+                $"{reason}\n\nSi el problema sigue, revisa la conexión configurada en:\n{UserSettingsPath}",
                 "Museo de la Sidra",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -47,8 +51,31 @@ public partial class App : Application
         new MainWindow().Show();
     }
 
-    private static IServiceProvider ConfigureServices()
+    /// <summary>
+    /// Configuración por capas; cada una sustituye a la anterior:
+    /// <list type="number">
+    /// <item>appsettings.json junto al .exe (PostgreSQL local de desarrollo).</item>
+    /// <item>%LOCALAPPDATA%\QuickInventory\appsettings.json, para la conexión de cada equipo.</item>
+    /// <item>Variables de entorno QUICKINVENTORY_..., p. ej. QUICKINVENTORY_ConnectionStrings__Museo.</item>
+    /// </list>
+    /// </summary>
+    private static IConfiguration LoadConfiguration() => new ConfigurationBuilder()
+        .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"), optional: true)
+        .AddJsonFile(UserSettingsPath, optional: true)
+        .AddEnvironmentVariables("QUICKINVENTORY_")
+        .Build();
+
+    private static string UserSettingsPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "QuickInventory",
+        "appsettings.json");
+
+    private static IServiceProvider ConfigureServices(IConfiguration configuration)
     {
+        var connectionString = configuration.GetConnectionString("Museo");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new BusinessRuleException("No hay ninguna base de datos configurada.");
+
         var services = new ServiceCollection();
 
         services.AddWpfBlazorWebView();
@@ -58,7 +85,7 @@ public partial class App : Application
 #endif
 
         services.AddMudServices();
-        services.AddData(DatabasePath());
+        services.AddData(connectionString);
 
         // Perfil activo (Taquilla / Tienda): uno por ventana.
         services.AddScoped<ActiveProfile>();
@@ -69,19 +96,6 @@ public partial class App : Application
         services.AddSingleton<IFilePicker, DesktopFilePicker>();
 
         return services.BuildServiceProvider();
-    }
-
-    /// <summary>
-    /// %LOCALAPPDATA%\QuickInventory\museo.db  — un único archivo con todos los datos.
-    /// Para hacer una copia de seguridad basta con copiar ese archivo con la app cerrada.
-    /// </summary>
-    private static string DatabasePath()
-    {
-        var directory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "QuickInventory");
-        Directory.CreateDirectory(directory);
-        return Path.Combine(directory, "museo.db");
     }
 
     private void UnhandledErrorHappens(object sender, DispatcherUnhandledExceptionEventArgs e)

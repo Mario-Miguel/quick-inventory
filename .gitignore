@@ -67,3 +67,5 @@ obj/
 *.db-wal
 publish/
 .vscode/
+
+.internalDocs/
