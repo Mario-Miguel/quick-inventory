@@ -59,6 +59,9 @@ nunit-*.xml
 
 bin/
 obj/
+
+# Lleva la contraseña de la base de datos: cada uno crea el suyo (ver README)
+src/QuickInventory.Desktop/appsettings.json
 .vs/
 *.user
 *.suo

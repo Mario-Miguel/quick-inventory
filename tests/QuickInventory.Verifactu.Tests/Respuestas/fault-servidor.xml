@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Error del servidor de la AEAT: se puede reintentar más tarde. -->
+<env:Envelope xmlns:env="http://schemas.xmlsoap.org/soap/envelope/">
+  <env:Body>
+    <env:Fault>
+      <faultcode>env:Server</faultcode>
+      <faultstring>Codigo[3501].Error técnico de base de datos.</faultstring>
+    </env:Fault>
+  </env:Body>
+</env:Envelope>

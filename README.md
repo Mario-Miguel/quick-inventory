@@ -17,6 +17,7 @@ Está hecha con **C# / .NET 10**, **Blazor Hybrid** dentro de una ventana **WPF*
 - **Modelos de Sales, Ingresos y Pagos** ya creados en la base de datos; sus pantallas muestran "en construcción".
 - **Asistente de primera instalación**: pide los datos del titular (nombre o razón social, NIF y dirección). Luego se cambian desde Admin → «Datos del titular».
 - **Bloqueo sin conexión**: si no se llega a la base de datos, la app se tapa con un aviso y no deja hacer nada hasta que vuelve la conexión.
+- **Librería VERI\*FACTU** (`QuickInventory.Verifactu`): genera los registros de facturación con su huella y su QR, y los envía a la AEAT. Todavía no la usa la app (ver `docs/verifactu.md`).
 - Productos de ejemplo la primera vez que se abre en Debug (puedes darlos de baja).
 
 ## Requisitos para programar
@@ -32,6 +33,10 @@ Está hecha con **C# / .NET 10**, **Blazor Hybrid** dentro de una ventana **WPF*
   ```powershell
   docker run -d --name museo-postgres -p 5432:5432 -e POSTGRES_PASSWORD=postgres -v museo-pgdata:/var/lib/postgresql/data postgres:17
   ```
+
+  Usa un volumen propio para cada proyecto: si el volumen ya tiene datos, postgres ignora `POSTGRES_USER`,
+  `POSTGRES_PASSWORD` y `POSTGRES_DB`. Después crea `%LOCALAPPDATA%\QuickInventory\appsettings.json` con la
+  conexión a ese contenedor (ver [Conexión](#conexión)).
 
 ## Cómo arrancarlo
 
@@ -62,9 +67,11 @@ src/
 ├── QuickInventory.Core      Modelos y contratos de servicio. Sin dependencias.
 ├── QuickInventory.Data      EF Core + PostgreSQL, migraciones e implementación de los servicios.
 ├── QuickInventory.UI        Pantallas Blazor (Razor Class Library).
-└── QuickInventory.Desktop   Ventana WPF que aloja las pantallas.
+├── QuickInventory.Desktop   Ventana WPF que aloja las pantallas.
+└── QuickInventory.Verifactu Librería VERI*FACTU: registros, huella, QR y envío a la AEAT. Sin dependencias.
 tests/
-└── QuickInventory.Core.Tests  Tests (xUnit) de las reglas de Core.
+├── QuickInventory.Core.Tests       Tests (xUnit) de las reglas de Core.
+└── QuickInventory.Verifactu.Tests  Tests de la librería VERI*FACTU.
 deploy/postgres/             Scripts para preparar la base de datos del museo.
 ```
 
@@ -77,8 +84,8 @@ Las dependencias van siempre hacia dentro: `Desktop → UI → Core` y `Desktop 
 
 La app lee la cadena de conexión `ConnectionStrings:Museo` de estos sitios, y cada uno sustituye al anterior:
 
-1. `appsettings.json` junto al `.exe`: el PostgreSQL local de desarrollo.
-2. `%LOCALAPPDATA%\QuickInventory\appsettings.json`: la conexión de cada equipo. Para apuntar a otra base basta con crear este archivo:
+1. `appsettings.json` junto al `.exe` (opcional).
+2. `%LOCALAPPDATA%\QuickInventory\appsettings.json`: la conexión de cada equipo. Es el sitio habitual, también para desarrollar:
 
    ```json
    {
@@ -89,6 +96,10 @@ La app lee la cadena de conexión `ConnectionStrings:Museo` de estos sitios, y c
    ```
 
 3. La variable de entorno `QUICKINVENTORY_ConnectionStrings__Museo`. También la usa `dotnet ef`.
+
+Ninguno de estos archivos está en el repositorio, porque llevan la contraseña: cada uno crea el suyo
+(`src/QuickInventory.Desktop/appsettings.json` está en `.gitignore`). Sin ninguno, la app avisa al arrancar de que
+no hay base de datos configurada.
 
 Si al arrancar no puede conectar, la app avisa con la ruta del archivo de configuración y se cierra. Si la conexión se pierde con la app abierta, se bloquea hasta que vuelve.
 

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Construida a partir de RespuestaConsultaLR.xsd: primera página de varias, con un registro anulado. -->
+<env:Envelope xmlns:env="http://schemas.xmlsoap.org/soap/envelope/">
+  <env:Body>
+    <tikLRRC:RespuestaConsultaFactuSistemaFacturacion xmlns:tikLRRC="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/RespuestaConsultaLR.xsd" xmlns:tik="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroInformacion.xsd">
+      <tikLRRC:Cabecera>
+        <tik:IDVersion>1.0</tik:IDVersion>
+        <tik:ObligadoEmision>
+          <tik:NombreRazon>MUSEO DE PRUEBA</tik:NombreRazon>
+          <tik:NIF>89890001K</tik:NIF>
+        </tik:ObligadoEmision>
+      </tikLRRC:Cabecera>
+      <tikLRRC:PeriodoImputacion>
+        <tikLRRC:Ejercicio>2027</tikLRRC:Ejercicio>
+        <tikLRRC:Periodo>01</tikLRRC:Periodo>
+      </tikLRRC:PeriodoImputacion>
+      <tikLRRC:IndicadorPaginacion>S</tikLRRC:IndicadorPaginacion>
+      <tikLRRC:ResultadoConsulta>ConDatos</tikLRRC:ResultadoConsulta>
+      <tikLRRC:RegistroRespuestaConsultaFactuSistemaFacturacion>
+        <tikLRRC:IDFactura>
+          <tik:IDEmisorFactura>89890001K</tik:IDEmisorFactura>
+          <tik:NumSerieFactura>T2027-000001</tik:NumSerieFactura>
+          <tik:FechaExpedicionFactura>15-01-2027</tik:FechaExpedicionFactura>
+        </tikLRRC:IDFactura>
+        <tikLRRC:DatosRegistroFacturacion>
+          <tikLRRC:TipoFactura>F2</tikLRRC:TipoFactura>
+          <tikLRRC:ImporteTotal>12.10</tikLRRC:ImporteTotal>
+        </tikLRRC:DatosRegistroFacturacion>
+        <tikLRRC:EstadoRegistro>
+          <tikLRRC:TimestampUltimaModificacion>2027-01-15T12:00:00+01:00</tikLRRC:TimestampUltimaModificacion>
+          <tikLRRC:EstadoRegistro>Anulada</tikLRRC:EstadoRegistro>
+        </tikLRRC:EstadoRegistro>
+      </tikLRRC:RegistroRespuestaConsultaFactuSistemaFacturacion>
+      <tikLRRC:ClavePaginacion>
+        <tik:IDEmisorFactura>89890001K</tik:IDEmisorFactura>
+        <tik:NumSerieFactura>T2027-000001</tik:NumSerieFactura>
+        <tik:FechaExpedicionFactura>15-01-2027</tik:FechaExpedicionFactura>
+      </tikLRRC:ClavePaginacion>
+    </tikLRRC:RespuestaConsultaFactuSistemaFacturacion>
+  </env:Body>
+</env:Envelope>

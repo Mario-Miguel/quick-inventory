@@ -2,7 +2,7 @@
 -- Puede leer y escribir datos, pero no cambiar el esquema: las migraciones se aplican
 -- con el usuario propietario (ver README), que no se instala en los equipos.
 --
--- Ejecutar una vez, conectado a la base "museo" con el usuario propietario, por ejemplo:
+-- Ejecutar una vez, conectado a la base de la app con el usuario propietario, por ejemplo:
 --   psql "host=... dbname=museo user=propietario sslmode=verify-full" -v password="'...'" -f usuario-app.sql
 -- Volver a ejecutarlo no hace daño: solo repite los permisos.
 
@@ -14,9 +14,14 @@ BEGIN
 END
 $$;
 
-ALTER ROLE museo_app PASSWORD :museo.123;
+ALTER ROLE museo_app PASSWORD :password;
 
-GRANT CONNECT ON DATABASE museo TO museo_app;
+-- La base en la que se ejecuta el script, se llame como se llame.
+DO $$
+BEGIN
+    EXECUTE format('GRANT CONNECT ON DATABASE %I TO museo_app', current_database());
+END
+$$;
 GRANT USAGE ON SCHEMA public TO museo_app;
 
 -- Las tablas y secuencias que ya existen...

@@ -458,6 +458,35 @@ migraciones y `dotnet test` se ejecuta.
 
 ### Fase 1 — Librería `QuickInventory.Verifactu` (sin tocar la app)
 
+> **Estado (23-10-2026)**: hechos los puntos 1 a 10, con sus tests (`tests/QuickInventory.Verifactu.Tests`, 96 tests).
+> Falta el punto 11: la prueba real está escrita (`AeatTestEnvironmentTests`), pero necesita el certificado (D7).
+> Para ejecutarla, definir estas variables de entorno y lanzar `dotnet test tests/QuickInventory.Verifactu.Tests`:
+>
+> | Variable | Valor |
+> | --- | --- |
+> | `VERIFACTU_PRUEBAS_CERTIFICADO` | Ruta del certificado `.pfx`, con su clave privada. |
+> | `VERIFACTU_PRUEBAS_CLAVE` | Contraseña del `.pfx`. |
+> | `VERIFACTU_PRUEBAS_NIF`, `VERIFACTU_PRUEBAS_NOMBRE` | Obligado tributario: el titular del certificado o alguien a quien representa. |
+> | `VERIFACTU_PRUEBAS_SELLO` | `1` si es un certificado de sello de entidad (usa otros servidores). |
+>
+> Cómo ha quedado:
+>
+> - Carpetas: `Modelos/`, `Formato/` (`VerifactuFormat`, `SpainTime`), `Huella/`, `Xml/` (`RecordXmlBuilder`,
+>   `SoapMessages`, `AeatSchemas`), `Validacion/`, `Qr/`, `Cliente/` (`AeatClient`, `ResponseParser`,
+>   `ErrorCatalog`) y `Esquemas/`.
+> - El XML se genera con `XElement` a mano. Cada registro se valida contra el XSD antes de devolverlo.
+> - Solo genera `F2` y `R5` (por diferencias o por sustitución), con IVA en régimen general o exento; el resto de
+>   tipos se rechaza al validar. No hay destinatarios ni `Incidencia` (el modo sin conexión está fuera de alcance).
+> - Diferencia admitida entre la cuota y base × tipo: 1 céntimo. La AEAT admite hasta 10 €, pero un descuadre
+>   mayor indicaría un fallo de cálculo. En la fase 2 el desglose se calcula por tipo de IVA sobre el total.
+> - La consulta es por mes (`QueryAsync` por páginas o `QueryMonthAsync` con todas).
+> - `AeatClient` no reintenta ni espera: lo hará el envío en segundo plano de la fase 3.
+> - Es genérica: no lleva nada propio del museo. La hora puede ser la peninsular o la de Canarias
+>   (`SpainTime.Now(SpanishTimeZone...)`) y `SystemInfo` indica si el sistema factura por varios obligados
+>   tributarios (`TipoUsoPosibleMultiOT`, `IndicadorMultiplesOT`; por defecto no).
+> - `xmldsig-core-schema.xsd` es una copia local sin la declaración de DTD del original (no usa sus entidades), para
+>   no tener que procesar DTD.
+
 1. Crear el proyecto (`net10.0`, sin dependencias de la solución) con los XSD/WSDL como recursos incrustados.
    - Descargar también `xmldsig-core-schema.xsd`, porque `SuministroInformacion.xsd` lo importa desde una URL del W3C.
 2. **Modelos propios** de entrada: emisor, sistema informático, datos de factura (número, fecha, tipo, descripción,
@@ -493,7 +522,9 @@ migraciones y `dotnet test` se ejecuta.
 9. **`ResponseParser`**:
    - Lee `RespuestaRegFactuSistemaFacturacion` (CSV, `DatosPresentacion`, `TiempoEsperaEnvio`, `EstadoEnvio` y cada `RespuestaLinea` con `RegistroDuplicado`).
    - Distingue `Fault` `Client` de `Server`.
-   - Mapea los códigos con `errores.properties` (incrustado). Ojo: el fichero está en ISO-8859-1.
+   - Mapea los códigos con `errores.properties` (incrustado). El original de la AEAT está en ISO-8859-1; la copia
+     incrustada está pasada a UTF-8 y sus cabeceras renombradas como `AeatErrorKind`. Si la AEAT publica una versión
+     nueva, hay que repetir ambas cosas.
    - **Tests** con respuestas de ejemplo: correcta, parcialmente correcta, duplicado y `Fault`.
 10. **Consulta** (`ConsultaFactuSistemaFacturacion`) por ejercicio y periodo, con paginación por `ClavePaginacion`.
     Sirve para conciliar después de un corte y para la pantalla de comprobación.

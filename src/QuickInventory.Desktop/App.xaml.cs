@@ -54,7 +54,7 @@ public partial class App : Application
     /// <summary>
     /// Configuración por capas; cada una sustituye a la anterior:
     /// <list type="number">
-    /// <item>appsettings.json junto al .exe (PostgreSQL local de desarrollo).</item>
+    /// <item>appsettings.json junto al .exe (opcional; no está en el repo porque lleva la contraseña).</item>
     /// <item>%LOCALAPPDATA%\QuickInventory\appsettings.json, para la conexión de cada equipo.</item>
     /// <item>Variables de entorno QUICKINVENTORY_..., p. ej. QUICKINVENTORY_ConnectionStrings__Museo.</item>
     /// </list>

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Librería VERI*FACTU: genera los registros de facturación (XML, huella y URL del QR), los envía a la AEAT
+       e interpreta las respuestas. No conoce la base de datos, ni las pantallas, ni los modelos de la app:
+       no depende de ningún otro proyecto de la solución. Ver docs/verifactu.md. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>QuickInventory.Verifactu</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Esquemas de la AEAT (y el de firma del W3C que importan), para validar lo que se genera. -->
+    <EmbeddedResource Include="Schemas\*" LogicalName="Schemas.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="QuickInventory.Verifactu.Tests" />
+  </ItemGroup>
+
+</Project>
