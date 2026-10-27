@@ -20,5 +20,13 @@ public abstract class Sale
     public decimal Total { get; set; }
     public bool Canceled { get; set; }
 
+    public string? InvoiceSeries { get; set; }
+    public int? InvoiceNumber { get; set; }
+    public DateOnly? InvoiceDate { get; set; }
+    public string? InvoiceId => InvoiceSeries is null ? null : $"{InvoiceSeries}-{InvoiceNumber:D6}";
+
+    public InvoiceType? InvoiceType { get; set; }
+    public int? RectifiedSaleId { get; set; }
+
     public List<SalesLine> Lines { get; set; } = [];
 }

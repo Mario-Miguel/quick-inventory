@@ -22,6 +22,14 @@ public class SalesLine
     /// <summary>Copia del porcentaje de descuento aplicado (0 si no tiene).</summary>
     public decimal DiscountPercent { get; set; }
 
+    /// <summary>
+    /// Copia del tipo de IVA del producto (21 = 21 %), o null si está exento. Es un número y no un
+    /// <see cref="Models.TaxRate"/> para que las ventas antiguas se sigan leyendo aunque ese tipo desaparezca.
+    /// </summary>
+    public decimal? TaxRate { get; set; }
+    /// <summary>Copia del motivo de exención del producto, o null si lleva IVA.</summary>
+    public TaxExemption? TaxExemption { get; set; }
+
     /// <summary>Copia de <see cref="TicketProduct.CountsAs"/> en el momento de la venta, por si luego cambia.</summary>
     public int CountsAs { get; set; } = 1;
 

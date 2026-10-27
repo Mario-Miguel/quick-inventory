@@ -52,6 +52,26 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
             .ToListAsync();
     }
 
+    public static async Task SaveSaleWithInvoiceAsync(BaseDbContext db, Sale sale)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync();
+
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock({AdvisoryLocks.Invoicing})");
+
+        var year = sale.Date.Year;
+        var series = await db.InvoiceSeries.SingleOrDefaultAsync(s => s.SalesPoint == sale.SalesPoint && s.Year == year) ?? throw new BusinessRuleException($"No hay serie de facturas para {year}");
+
+        series.LastNumber++;
+        sale.InvoiceSeries = series.Code;
+        sale.InvoiceNumber = series.LastNumber;
+        sale.InvoiceDate = DateOnly.FromDateTime(sale.Date);
+        sale.InvoiceType = InvoiceType.F2; //TODO: pillarlo de la configuración??
+
+        db.Sales.Add(sale);
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+    }
+
     public async Task<Sale> RegisterTicketSaleAsync(PaymentMethod paymentMethod, IReadOnlyList<CartLine> lines, bool guidedVisit, bool groupVisit)
     {
         if (lines.Count == 0)
@@ -61,6 +81,7 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
 
         await using var db = await factory.CreateDbContextAsync();
 
+
         var sale = new TicketSale { Date = DateTime.Now, PaymentMethod = paymentMethod, GuidedVisit = guidedVisit, GroupVisit = groupVisit };
         // El suplemento de la visita guiada se suma después del descuento: el descuento es solo sobre la entrada.
         var supplement = guidedVisit ? TicketSale.GuidedVisitSupplement : 0;
@@ -69,8 +90,7 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
         await AddLinesAsync(db, sale, lines, supplement, groupDiscount);
 
         sale.Total = sale.Lines.Sum(l => l.Subtotal);
-        db.Sales.Add(sale);
-        await db.SaveChangesAsync();
+        await SaveSaleWithInvoiceAsync(db, sale);
         return sale;
     }
 
@@ -88,8 +108,7 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
         await AddLinesAsync(db, sale, lines);
 
         sale.Total = sale.Lines.Sum(l => l.Subtotal);
-        db.Sales.Add(sale);
-        await db.SaveChangesAsync();
+        await SaveSaleWithInvoiceAsync(db, sale);
         return sale;
     }
 
@@ -114,6 +133,10 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
             if (product.Category.SalesPoint != sale.SalesPoint)
             {
                 throw new BusinessRuleException("Producto no pertenece al punto de venta.");
+            }
+            if (product.TaxRate is null && product.TaxExemption is null)
+            {
+                throw new BusinessRuleException($"El producto {product.Name} no tiene IVA. Pida al administrador que lo indique en el inventario.");
             }
 
             if (product is ShopProduct shopProduct)
@@ -141,6 +164,8 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
                 UnitPrice = (line.Discount?.Apply(product.SalePrice) ?? product.SalePrice) + supplement - discount,
                 DiscountName = line.Discount?.Name,
                 DiscountPercent = line.Discount?.Amount ?? 0,
+                TaxRate = product.TaxRate?.Value,
+                TaxExemption = product.TaxExemption,
                 Category = product.Category
             });
         }

@@ -86,12 +86,12 @@ public static class DataConfiguration
         var t0 = DateTime.Now;
         var examples = new List<Product>
         {
-            new TicketProduct() { Name = "Entrada general", SalePrice = 5.00m, },
-            new TicketProduct() { Name = "Entrada reducida", SalePrice = 3.00m, },
-            new ShopProduct() { Name = "Botella de sidra natural", SalePrice = 3.50m, CostPrice = 1.80m, Stock = 48, MinStock = 12 },
-            new ShopProduct() { Name = "Vaso de sidra", SalePrice = 4.00m, CostPrice = 1.50m, Stock = 30, MinStock = 10 },
-            new ShopProduct() { Name = "Camiseta del museo", SalePrice = 15.00m, CostPrice = 6.00m, Stock = 6, MinStock = 8 },
-            new ShopProduct() { Name = "Postal", SalePrice = 1.00m, CostPrice = 0.30m, Stock = 120, MinStock = 20 },
+            new TicketProduct() { Name = "Entrada general", SalePrice = 5.00m, TaxRate=TaxRate.TR2100},
+            new TicketProduct() { Name = "Entrada reducida", SalePrice = 3.00m, TaxRate=TaxRate.TR2100},
+            new ShopProduct() { Name = "Botella de sidra natural", SalePrice = 3.50m, CostPrice = 1.80m, Stock = 48, MinStock = 12, TaxRate=TaxRate.TR2100 },
+            new ShopProduct() { Name = "Vaso de sidra", SalePrice = 4.00m, CostPrice = 1.50m, Stock = 30, MinStock = 10, TaxRate=TaxRate.TR2100 },
+            new ShopProduct() { Name = "Camiseta del museo", SalePrice = 15.00m, CostPrice = 6.00m, Stock = 6, MinStock = 8, TaxRate=TaxRate.TR2100 },
+            new ShopProduct() { Name = "Postal", SalePrice = 1.00m, CostPrice = 0.30m, Stock = 120, MinStock = 20, TaxRate=TaxRate.TR2100 },
         };
 
         foreach (var p in examples)

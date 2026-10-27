@@ -113,9 +113,37 @@ dotnet tool restore   # una vez: instala dotnet-ef (herramienta local, ver dotne
 # Después de cambiar un modelo:
 dotnet ef migrations add <Nombre> --project src/QuickInventory.Data --startup-project src/QuickInventory.Data --output-dir Migrations
 
-# Aplicarlas a una base (la de la variable de entorno o, si no está, la local):
+# Aplicarlas a la base de la variable de entorno QUICKINVENTORY_ConnectionStrings__Museo:
 dotnet ef database update --project src/QuickInventory.Data --startup-project src/QuickInventory.Data
 ```
+
+`dotnet ef` no lee los `appsettings.json`: solo la variable de entorno. Sin ella falla con
+«The ConnectionString property has not been initialized» (también `migrations remove`, que consulta la base para
+saber si la migración ya está aplicada).
+
+#### Aplicar una migración paso a paso
+
+1. Definir la variable con un usuario **propietario** de la base (no `museo_app`, que no puede cambiar el esquema):
+
+   ```bash
+   export QUICKINVENTORY_ConnectionStrings__Museo='Host=...;Port=5432;Database=museo;Username=<propietario>;Password=...'
+   ```
+
+2. Ver cuáles faltan. Las pendientes salen marcadas con `(Pending)`:
+
+   ```bash
+   dotnet ef migrations list --project src/QuickInventory.Data --startup-project src/QuickInventory.Data
+   ```
+
+3. Aplicarlas con `dotnet ef database update …` (arriba). Para revisar antes el SQL que se ejecutará, sobre todo
+   en la base del museo: `dotnet ef migrations script <ÚltimaAplicada> --idempotent --project src/QuickInventory.Data --startup-project src/QuickInventory.Data`.
+4. Volver a ejecutar `migrations list` y comprobar que no queda ninguna `(Pending)`.
+
+Las tablas nuevas no necesitan permisos aparte: `deploy/postgres/usuario-app.sql` ya da a `museo_app` acceso a las
+que cree el propietario en el futuro.
+
+Para deshacer la última migración **antes de subirla a git** (si ya está aplicada en otra base, no se toca: se
+corrige con una migración nueva): `dotnet ef database update <Anterior> …` y después `dotnet ef migrations remove …`.
 
 - En **Debug** la app aplica sola las migraciones pendientes al arrancar.
 - En **Release** no toca el esquema: solo comprueba que la base y la app van por la misma migración y, si no, avisa y se cierra. En el museo las migraciones se aplican con `dotnet ef database update`, con el usuario **propietario** de la base, al publicar cada versión.

@@ -17,7 +17,7 @@ namespace QuickInventory.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -114,6 +114,40 @@ namespace QuickInventory.Data.Migrations
                     b.ToTable("InvoiceFiles");
                 });
 
+            modelBuilder.Entity("QuickInventory.Core.Models.InvoiceSeries", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("LastNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SalesPoint")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("SalesPoint", "Year")
+                        .IsUnique();
+
+                    b.ToTable("InvoiceSeries");
+                });
+
             modelBuilder.Entity("QuickInventory.Core.Models.Issuer", b =>
                 {
                     b.Property<int>("Id")
@@ -163,6 +197,12 @@ namespace QuickInventory.Data.Migrations
                     b.Property<long>("SalePrice")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("TaxExemption")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TaxRate")
+                        .HasColumnType("text");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(8)
@@ -193,9 +233,25 @@ namespace QuickInventory.Data.Migrations
                     b.Property<DateTime>("Date")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<DateOnly?>("InvoiceDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("InvoiceNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InvoiceSeries")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("InvoiceType")
+                        .HasColumnType("text");
+
                     b.Property<string>("PaymentMethod")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int?>("RectifiedSaleId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("SalesPoint")
                         .IsRequired()
@@ -207,6 +263,11 @@ namespace QuickInventory.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Date");
+
+                    b.HasIndex("RectifiedSaleId");
+
+                    b.HasIndex("InvoiceSeries", "InvoiceNumber")
+                        .IsUnique();
 
                     b.ToTable("Sales");
 
@@ -251,6 +312,12 @@ namespace QuickInventory.Data.Migrations
 
                     b.Property<int>("SaleId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("TaxExemption")
+                        .HasColumnType("text");
+
+                    b.Property<long?>("TaxRate")
+                        .HasColumnType("bigint");
 
                     b.Property<long>("UnitPrice")
                         .HasColumnType("bigint");
@@ -361,6 +428,13 @@ namespace QuickInventory.Data.Migrations
                         .HasForeignKey("QuickInventory.Core.Models.InvoiceFile", "CashMovementId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("QuickInventory.Core.Models.Sale", b =>
+                {
+                    b.HasOne("QuickInventory.Core.Models.Sale", null)
+                        .WithMany()
+                        .HasForeignKey("RectifiedSaleId");
                 });
 
             modelBuilder.Entity("QuickInventory.Core.Models.SalesLine", b =>
