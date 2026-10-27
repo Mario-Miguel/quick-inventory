@@ -130,10 +130,6 @@ namespace QuickInventory.Data.Migrations
                     b.Property<int>("LastNumber")
                         .HasColumnType("integer");
 
-                    b.Property<string>("SalesPoint")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<int>("Year")
                         .HasColumnType("integer");
 
@@ -142,7 +138,7 @@ namespace QuickInventory.Data.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.HasIndex("SalesPoint", "Year")
+                    b.HasIndex("Year")
                         .IsUnique();
 
                     b.ToTable("InvoiceSeries");

@@ -181,6 +181,15 @@ body {
     background-color: color-mix(in srgb, var(--mud-palette-error) 30%, transparent) !important;
 }
 
+/* Producto sin IVA en el inventario: fondo naranja suave, también en filas con rayas y al pasar el ratón. */
+.mud-table-row.product-no-tax-row {
+    background-color: color-mix(in srgb, var(--mud-palette-warning) 15%, transparent) !important;
+}
+
+.mud-table-row.product-no-tax-row:hover {
+    background-color: color-mix(in srgb, var(--mud-palette-warning) 25%, transparent) !important;
+}
+
 /* Exportar ventas: ancho fijo para que las flechas no se muevan al cambiar de mes. */
 .export-month {
   min-width: 200px;

@@ -104,12 +104,12 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
             e.Property(i => i.Address).HasMaxLength(300);
         });
 
+        // Una serie por año, común a Taquilla y Tienda.
         model.Entity<InvoiceSeries>(e =>
         {
-            e.Property(i => i.Code).HasMaxLength(20).IsRequired();
-            e.Property(i => i.Year).IsRequired();
+            e.Property(i => i.Code).HasMaxLength(Core.Models.InvoiceSeries.MaxCodeLength).IsRequired();
             e.HasIndex(s => s.Code).IsUnique();
-            e.HasIndex(s => new { s.SalesPoint, s.Year }).IsUnique();
+            e.HasIndex(s => s.Year).IsUnique();
         });
     }
 }
@@ -139,7 +139,6 @@ internal sealed class InvoiceTypeConverter() : ValueConverter<InvoiceType, strin
     valor => InvoiceType.FromValue(valor)
 );
 
-// En QuickInventory.Data, por ejemplo en BaseDbContext.cs o en un Bloqueos.cs aparte.
 internal static class AdvisoryLocks
 {
     /// <summary>

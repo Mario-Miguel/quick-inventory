@@ -33,8 +33,8 @@ public sealed record TaxRate
 {
     private TaxRate(string name, decimal value)
     {
-        Value = value;
         Name = name;
+        Value = value;
     }
 
     public decimal Value { get; }

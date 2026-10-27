@@ -49,6 +49,9 @@ public abstract class Product
     public TaxRate? TaxRate { get; set; }
     public TaxExemption? TaxExemption { get; set; }
 
+    /// <summary>Si tiene el IVA indicado (tipo o exención). Sin él no se puede vender.</summary>
+    public bool HasTax => TaxRate is not null || TaxExemption is not null;
+
     public abstract ProductCategory Category { get; }
     // public virtual bool StockControl => false;
 

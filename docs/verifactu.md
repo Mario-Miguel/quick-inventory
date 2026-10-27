@@ -74,8 +74,8 @@ inventario, ventas y caja.
 **Consecuencias para VERI\*FACTU**:
 
 - **Una sola instalación del sistema**: un `NumeroInstalacion`, una cadena de registros y una fila de
-  `VerifactuSettings`, compartidos por todos los equipos. No hace falta una serie por equipo: basta con una serie
-  por punto de venta y año (Taquilla, Tienda), como en la fase 2.
+  `VerifactuSettings`, compartidos por todos los equipos. No hace falta una serie por equipo ni por punto de venta:
+  basta con **una serie por año, común a Taquilla y Tienda** (fase 2). Las rectificativas irán en su propia serie.
 - **Generar el registro hay que hacerlo de uno en uno entre equipos.** Con SQLite bastaba la transacción; con dos
   equipos cobrando a la vez, los dos podrían leer el mismo «último registro» y romper la cadena, o coger el mismo
   número de factura. Dentro de la transacción de la venta:
@@ -174,7 +174,7 @@ Campos principales de un `RegistroAlta` para una factura simplificada típica de
 | --- | --- |
 | `IDVersion` | `1.0` |
 | `IDFactura/IDEmisorFactura` | NIF del museo (igual que `Cabecera/ObligadoEmision/NIF`). |
-| `IDFactura/NumSerieFactura` | Serie + número, máx. 60 caracteres ASCII 32-126, **sin** `" ' < > =`. Ej.: `T2027-000123`. |
+| `IDFactura/NumSerieFactura` | Serie + número, máx. 60 caracteres ASCII 32-126, **sin** `" ' < > =`. Ej.: `F2027-000123`. |
 | `IDFactura/FechaExpedicionFactura` | `dd-MM-yyyy`. No puede ser futura. |
 | `NombreRazonEmisor` | Razón social del museo. |
 | `TipoFactura` | `F2` (simplificada). `R5` para rectificativas de simplificadas. `F1`/`F3` si se hace la fase 2. |
@@ -386,7 +386,9 @@ Nuevas tablas y columnas. Todo con **migraciones EF** (fase 0). Actualizar `docs
 - Datos del sistema: `ProducerName`, `ProducerNif`, `SystemName`, `SystemId` (2 caracteres), `InstallationNumber`.
 - `Enabled`, `LastWaitSeconds`, `NextSendAt`.
 
-**`InvoiceSeries`**: `Code` (p. ej. `T2027`, `S2027`), `SalesPoint`, `Year`, `LastNumber`.
+**`InvoiceSeries`**: `Code` (p. ej. `F2027`), `Year` (único: una serie por año, común a Taquilla y Tienda), `LastNumber`.
+Al crearla, `LastNumber` puede no ser 0 si ese año ya se emitieron facturas con otro programa. Admin la gestiona en
+«Series de facturas»; una serie con facturas emitidas desde la aplicación ya no se puede cambiar.
 El número se asigna incrementando `LastNumber` dentro de la transacción de la venta. Así es correlativo y sin huecos:
 si la transacción falla, el número no se consume.
 
@@ -539,8 +541,8 @@ migraciones y `dotnet test` se ejecuta.
    incluidas. Campo obligatorio en `ProductDialog` (desplegable con los tipos permitidos y «Exento», con el motivo
    de la exención), copia en `SalesLine` al vender. Los productos que ya existan se quedan sin IVA hasta que Admin lo
    indique, y no se pueden vender hasta entonces.
-2. **Series y numeración**: tabla `InvoiceSeries`, una serie por punto de venta y año. Con la base compartida (D6)
-   no hace falta una serie por equipo. Asignar número en `RegisterTicketSaleAsync`/`RegisterShopSaleAsync` dentro de
+2. **Series y numeración**: tabla `InvoiceSeries`, una serie por año, común a Taquilla y Tienda. Con la base
+   compartida (D6) no hace falta una serie por equipo ni por punto de venta. Asignar número en `RegisterTicketSaleAsync`/`RegisterShopSaleAsync` dentro de
    la transacción, con el bloqueo de la cadena tomado.
 3. **Cálculo del desglose**: agrupar las líneas por tipo. Base = total con IVA / (1 + tipo/100) y
    cuota = total − base, redondeando a céntimos **por tipo**, no por línea, y comprobando que base + cuota = total

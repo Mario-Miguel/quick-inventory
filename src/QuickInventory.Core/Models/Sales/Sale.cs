@@ -23,7 +23,9 @@ public abstract class Sale
     public string? InvoiceSeries { get; set; }
     public int? InvoiceNumber { get; set; }
     public DateOnly? InvoiceDate { get; set; }
-    public string? InvoiceId => InvoiceSeries is null ? null : $"{InvoiceSeries}-{InvoiceNumber:D6}";
+    public string? InvoiceId => InvoiceSeries is null || InvoiceNumber is null
+        ? null
+        : Models.InvoiceSeries.FormatInvoiceId(InvoiceSeries, InvoiceNumber.Value);
 
     public InvoiceType? InvoiceType { get; set; }
     public int? RectifiedSaleId { get; set; }

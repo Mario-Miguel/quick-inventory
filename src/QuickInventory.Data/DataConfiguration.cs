@@ -24,6 +24,7 @@ public static class DataConfiguration
         services.AddScoped<ISalesService, SalesService>();
         services.AddScoped<IRefundService, RefundService>();
         services.AddScoped<IIssuerService, IssuerService>();
+        services.AddScoped<IInvoiceSeriesService, InvoiceSeriesService>();
         return services;
     }
 

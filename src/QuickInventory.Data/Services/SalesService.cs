@@ -52,14 +52,15 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
             .ToListAsync();
     }
 
-    public static async Task SaveSaleWithInvoiceAsync(BaseDbContext db, Sale sale)
+    private static async Task SaveSaleWithInvoiceAsync(BaseDbContext db, Sale sale)
     {
         await using var transaction = await db.Database.BeginTransactionAsync();
 
         await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock({AdvisoryLocks.Invoicing})");
 
         var year = sale.Date.Year;
-        var series = await db.InvoiceSeries.SingleOrDefaultAsync(s => s.SalesPoint == sale.SalesPoint && s.Year == year) ?? throw new BusinessRuleException($"No hay serie de facturas para {year}");
+        // La serie es la misma para Taquilla y Tienda.
+        var series = await db.InvoiceSeries.SingleOrDefaultAsync(s => s.Year == year) ?? throw new BusinessRuleException($"No hay serie de facturas para {year}");
 
         series.LastNumber++;
         sale.InvoiceSeries = series.Code;
@@ -134,7 +135,7 @@ public sealed class SalesService(IDbContextFactory<BaseDbContext> factory) : ISa
             {
                 throw new BusinessRuleException("Producto no pertenece al punto de venta.");
             }
-            if (product.TaxRate is null && product.TaxExemption is null)
+            if (!product.HasTax)
             {
                 throw new BusinessRuleException($"El producto {product.Name} no tiene IVA. Pida al administrador que lo indique en el inventario.");
             }
