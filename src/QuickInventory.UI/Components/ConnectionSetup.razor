@@ -1,0 +1,107 @@
+@* Pantalla de conexión: sustituye a toda la aplicación (no a una página: sin base no hay layout que valga)
+   mientras este equipo no tenga la contraseña de la base de datos. Al guardarla, la app se vuelve a abrir
+   y sigue como siempre (con el asistente de la primera instalación si la base está vacía). *@
+@inject ClientSettings Client
+@inject IConnectionSetup Setup
+
+<MudThemeProvider Theme="theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudText Typo="Typo.h6" Class="ml-2">@Client.AppName</MudText>
+    </MudAppBar>
+
+    <MudMainContent Class="pt-16">
+        <MudContainer MaxWidth="MaxWidth.Large" Class="py-6">
+            <MudPaper Class="pa-8 mx-auto first-run" Outlined="true">
+                <h1 class="page-title">Conexión con la base de datos</h1>
+                <MudText Typo="Typo.body1" Class="mb-4">
+                    Antes de empezar hay que escribir la <b>contraseña de la base de datos</b>, donde se guardan las
+                    ventas y el inventario. Solo hace falta una vez en cada ordenador. Si no la sabes, pídela a
+                    quien instaló la aplicación.
+                </MudText>
+
+                @if (Setup.Reason is not null)
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mb-4">@Setup.Reason</MudAlert>
+                }
+
+                <MudSimpleTable Outlined="true" Class="mb-6">
+                    <tbody>
+                        <tr><th>Servidor</th><td>@Database.Host</td></tr>
+                        <tr><th>Base de datos</th><td>@Database.Name</td></tr>
+                        <tr><th>Usuario</th><td>@Database.Username</td></tr>
+                    </tbody>
+                </MudSimpleTable>
+
+                <MudTextField @bind-Value="password"
+                              Label="Contraseña"
+                              Variant="Variant.Outlined"
+                              InputType="@(showPassword ? InputType.Text : InputType.Password)"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                              AdornmentAriaLabel="Mostrar u ocultar la contraseña"
+                              OnAdornmentClick="() => showPassword = !showPassword"
+                              Immediate="true"
+                              OnKeyDown="OnKeyDown"
+                              Disabled="saving"
+                              AutoFocus="true" />
+
+                @if (error is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-4">@error</MudAlert>
+                }
+
+                <div class="d-flex justify-end mt-8">
+                    <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Check"
+                               Disabled="@(saving || string.IsNullOrEmpty(password))"
+                               OnClick="Save">
+                        @(saving ? "Comprobando…" : "Probar y continuar")
+                    </MudButton>
+                </div>
+            </MudPaper>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private MudTheme theme = null!;
+    private string password = "";
+    private bool showPassword;
+    private bool saving;
+    private string? error;
+
+    // Esta pantalla solo se abre si client.json trae la base de datos (ver App.OnStartup).
+    private ClientDatabase Database => Client.Database!;
+
+    protected override void OnInitialized() => theme = Theme.For(Client.Colors);
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !saving && !string.IsNullOrEmpty(password)) await Save();
+    }
+
+    private async Task Save()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            await Setup.SaveAndRestartAsync(password);
+        }
+        catch (BusinessRuleException ex)
+        {
+            error = ex.Message;
+            saving = false;
+        }
+        catch (Exception)
+        {
+            error = "No se ha podido guardar la conexión. Inténtalo de nuevo.";
+            saving = false;
+        }
+    }
+}

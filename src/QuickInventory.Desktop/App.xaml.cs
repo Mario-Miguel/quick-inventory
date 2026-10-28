@@ -9,6 +9,7 @@ using QuickInventory.Core;
 using QuickInventory.Core.Models;
 using QuickInventory.Data;
 using QuickInventory.UI;
+using QuickInventory.UI.Components;
 
 namespace QuickInventory.Desktop;
 
@@ -35,8 +36,23 @@ public partial class App : Application
         try
         {
             Client = ClientSettingsLoader.Load();
-            services = ConfigureServices(LoadConfiguration(), Client, updater);
+            var configuration = LoadConfiguration();
+
+            // Equipo recién instalado: si client.json dice dónde está la base, solo falta la contraseña.
+            if (string.IsNullOrWhiteSpace(configuration.GetConnectionString("Museo")) && CanAskPassword)
+            {
+                ShowConnectionSetup(reason: null);
+                return;
+            }
+
+            services = ConfigureServices(configuration, Client, updater);
             DataConfiguration.InitDatabase(services);
+        }
+        catch (DatabaseLoginException ex) when (CanAskPassword)
+        {
+            // La contraseña guardada ya no sirve (p. ej. se ha cambiado en el servidor): se pide la nueva.
+            ShowConnectionSetup($"{ex.Message} Escribe la contraseña actual.");
+            return;
         }
         catch (Exception ex)
         {
@@ -55,7 +71,37 @@ public partial class App : Application
         // La ventana recoge los servicios desde este recurso (ver MainWindow.xaml).
         Resources.Add("services", services);
 
-        new MainWindow().Show();
+        new MainWindow(typeof(Main)).Show();
+    }
+
+    /// <summary>
+    /// Si se puede pedir solo la contraseña (pantalla ConnectionSetup): en Release y con el servidor que mete
+    /// el pipeline. En Debug la conexión sale siempre de appsettings.json.
+    /// </summary>
+    private static bool CanAskPassword =>
+#if DEBUG
+        false;
+#else
+        Client.Database is { Host.Length: > 0 };
+#endif
+
+    /// <summary>
+    /// Abre la pantalla que pide la contraseña de la base de datos en lugar de la aplicación. Sus servicios
+    /// no incluyen la base (todavía no se puede conectar); al guardarla, la app se vuelve a abrir.
+    /// </summary>
+    private void ShowConnectionSetup(string? reason)
+    {
+        var services = new ServiceCollection();
+        services.AddWpfBlazorWebView();
+#if DEBUG
+        services.AddBlazorWebViewDeveloperTools();
+#endif
+        services.AddMudServices();
+        services.AddSingleton(Client);
+        services.AddSingleton<IConnectionSetup>(new DesktopConnectionSetup(Client.Database!, UserSettingsPath, reason));
+
+        Resources.Add("services", services.BuildServiceProvider());
+        new MainWindow(typeof(ConnectionSetup)).Show();
     }
 
     /// <summary>

@@ -48,4 +48,28 @@ public class ClientSettingsTests
         settings.Issuer.Nif = "B12345675";
         Assert.Throws<BusinessRuleException>(settings.Validate);
     }
+
+    [Fact]
+    public void La_base_de_datos_es_opcional_pero_si_esta_necesita_nombre_y_usuario()
+    {
+        var settings = new ClientSettings
+        {
+            Database = new ClientDatabase { Host = " servidor.example.com ", Name = "museo", Username = "museo_app" }
+        };
+
+        settings.Normalize();
+        settings.Validate();
+        Assert.Equal("servidor.example.com", settings.Database.Host);
+
+        // El servidor no va en client.json: lo pone el pipeline al compilar.
+        settings.Database.Host = "";
+        settings.Validate();
+
+        settings.Database.Username = "";
+        Assert.Throws<BusinessRuleException>(settings.Validate);
+
+        settings.Database.Username = "museo_app";
+        settings.Database.Port = 0;
+        Assert.Throws<BusinessRuleException>(settings.Validate);
+    }
 }

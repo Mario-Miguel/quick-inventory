@@ -42,6 +42,12 @@ public static class ClientSettingsLoader
         if (settings is null)
             throw new BusinessRuleException("La configuración del client (client.json) está vacía.");
 
+        // El servidor de la base no está en client.json (el repo es público): lo mete el pipeline (-p:DbHost).
+        var host = typeof(ClientSettingsLoader).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => a.Key == "DbHost")?.Value;
+        if (settings.Database is not null && !string.IsNullOrWhiteSpace(host))
+            settings.Database.Host = host;
+
         settings.Normalize();
         try
         {

@@ -20,6 +20,12 @@
     <AssemblyMetadata Include="UpdateUrl" Value="$(UpdateUrl)" />
   </ItemGroup>
 
+  <!-- Servidor de la base de datos (secreto DB_HOST del repo). Lo pone el pipeline; completa el apartado
+       Database de client.json para que la app solo tenga que pedir la contraseña (ver ClientSettingsLoader). -->
+  <ItemGroup Condition="'$(DbHost)' != ''">
+    <AssemblyMetadata Include="DbHost" Value="$(DbHost)" />
+  </ItemGroup>
+
   <!-- Client para el que se compila: carpeta de clients/ con su client.json (ver README, «Clients»).
        Se elige con -p:Client=<id>; sin él, el Museo de la Sidra. -->
   <PropertyGroup>

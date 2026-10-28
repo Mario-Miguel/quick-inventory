@@ -8,5 +8,9 @@
   "Features": {
     "Verifactu": true,
     "PrestaShop": true
+  },
+  "Database": {
+    "Name": "quickinventory",
+    "Username": "museo_app"
   }
 }

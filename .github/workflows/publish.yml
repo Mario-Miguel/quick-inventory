@@ -65,6 +65,8 @@ jobs:
   package:
     needs: [data, tests]
     runs-on: windows-latest
+    # Para leer DB_HOST, que es un secreto del environment del cliente (cada cliente puede tener su servidor).
+    environment: ${{ needs.data.outputs.client }}
     env:
       CLIENT: ${{ needs.data.outputs.client }}
       VERSION: ${{ needs.data.outputs.version }}
@@ -77,7 +79,15 @@ jobs:
       - run: dotnet tool restore
 
       - name: Compile
-        run: dotnet publish src/QuickInventory.Desktop -c Release -r win-x64 --self-contained -p:Client=$env:CLIENT -p:Version=$env:VERSION -p:UpdateUrl=$env:UPDATE_URL -o publish
+        env:
+          # Servidor de la base: completa el apartado Database de client.json (que no lo lleva porque el repo
+          # es público) para que la app instalada solo pida la contraseña.
+          DB_HOST: ${{ secrets.DB_HOST }}
+        run: |
+          $client = Get-Content "clients/$env:CLIENT/client.json" -Raw | ConvertFrom-Json
+          if ($client.Database -and -not $env:DB_HOST) { throw "clients/$env:CLIENT/client.json has Database: missing secret DB_HOST" }
+          dotnet publish src/QuickInventory.Desktop -c Release -r win-x64 --self-contained -p:Client=$env:CLIENT `
+            -p:Version=$env:VERSION -p:UpdateUrl=$env:UPDATE_URL -p:DbHost=$env:DB_HOST -o publish
 
       - name: Check there is no password
         run: if (Test-Path publish/appsettings.json) { throw "publish/appsettings.json can't be in the package" }
@@ -126,6 +136,8 @@ jobs:
           QUICKINVENTORY_ConnectionStrings__Museo: ${{ secrets.DB_CONNECTION }}
         run: |
           [ -n "$QUICKINVENTORY_ConnectionStrings__Museo" ] || { echo "::error::Missing secret DB_CONNECTION in the environment'$CLIENT'"; exit 1; }
+          # dotnet ef no restaura los paquetes: sin esto falla con NETSDK1004 (falta project.assets.json).
+          dotnet restore src/QuickInventory.Data
           dotnet ef migrations bundle --project src/QuickInventory.Data --startup-project src/QuickInventory.Data -o efbundle --force
           ./efbundle
 

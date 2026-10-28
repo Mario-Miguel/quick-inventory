@@ -24,8 +24,9 @@ equipos del museo ── cada 2 h y al arrancar ──────────�
 - La dirección de esa release va **dentro del .exe** (`-p:UpdateUrl`, ver `VelopackUpdater`). Una compilación
   local no la lleva, así que no busca actualizaciones.
 - El **instalador es público** (cualquiera con el enlace lo descarga), así que **nunca lleva la conexión a la
-  base de datos**: el pipeline falla si aparece un `appsettings.json` en el paquete. La conexión se configura una
-  vez en cada equipo (`%LOCALAPPDATA%\QuickInventory\appsettings.json`, ver README).
+  base de datos**: el pipeline falla si aparece un `appsettings.json` en el paquete. La primera vez que se abre en
+  cada equipo, la app pide la contraseña de la base (la base y el usuario van en `client.json`, apartado `Database`; el servidor lo pone el workflow desde el
+  secreto `DB_HOST` del environment del cliente).
 - **Migraciones**: se aplican justo antes de subir la versión. Desde ese momento los equipos con la versión
   anterior no arrancan («la base de datos es de una versión más nueva»), pero en lugar de solo avisar ofrecen
   actualizar (`App.OfferUpdate`). Los que ya están abiertos siguen funcionando mientras las migraciones solo
@@ -40,6 +41,9 @@ equipos del museo ── cada 2 h y al arrancar ──────────�
    los archivos con su propio `GITHUB_TOKEN`.
 2. Por cada cliente, _Settings → Environments → New environment_ con el **mismo nombre que su carpeta** de
    `clientes/` (`museo-sidra`):
+   - Secreto `DB_HOST`: el servidor de su base, p. ej. `ep-...-pooler.c-2.eu-west-2.aws.neon.tech` (el que usa la
+     app; el pooler vale). El workflow lo mete en el `.exe` (`-p:DbHost`) y falla si el `client.json` tiene
+     apartado `Database` y falta.
    - Secreto `DB_CONNECTION`: cadena de conexión del **usuario propietario** de su base (el que puede cambiar el
      esquema; no `museo_app`).
    - Recomendado: _Required reviewers_ contigo, para aprobar cada publicación antes de tocar su base.
@@ -62,7 +66,8 @@ que la última de ese cliente. Al terminar, el resumen del workflow muestra el e
 1. Descarga y ejecuta `https://github.com/Mario-Miguel/quick-inventory/releases/download/updates-<cliente>/QuickInventory-<cliente>-win-Setup.exe`.
    Se instala en `%LOCALAPPDATA%\QuickInventory-<cliente>` sin pedir permisos de administrador y crea el acceso
    directo.
-2. Crea `%LOCALAPPDATA%\QuickInventory\appsettings.json` con la conexión (ver README, «Conexión»).
+2. Ábrela y escribe la contraseña de `museo_app` en la pantalla «Conexión con la base de datos». Se guarda en
+   `%LOCALAPPDATA%\QuickInventory\appsettings.json` y no se vuelve a pedir en ese equipo.
 
 El instalador no está firmado: Windows SmartScreen avisará la primera vez («Más información → Ejecutar de todas
 formas»). Para quitar el aviso hace falta un certificado de firma de código (`vpk pack --signTemplate`/`--azureTrustedSignFile`).

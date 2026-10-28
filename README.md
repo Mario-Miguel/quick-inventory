@@ -71,7 +71,8 @@ con su `client.json`:
   "AppName": "Museo de la Sidra",
   "Colors": { "Primary": "#2F5D2A", "Secondary": "#C8922A", "Background": "#FAF7F2" },
   "Features": { "Verifactu": true, "PrestaShop": true },
-  "Issuer": { "Nif": "G33123456", "LegalName": "Fundación ...", "Address": "..." }
+  "Issuer": { "Nif": "G33123456", "LegalName": "Fundación ...", "Address": "..." },
+  "Database": { "Port": 5432, "Name": "quickinventory", "Username": "museo_app" }
 }
 ```
 
@@ -81,13 +82,19 @@ con su `client.json`:
   `Verifactu` todavía no cambia nada: la app aún no envía facturas (ver `docs/verifactu.md`).
 - `Issuer` (opcional): datos fiscales del titular. Si están, el asistente de la primera instalación sale ya
   relleno y solo hay que confirmarlos. Si no, se escriben a mano en el asistente.
+- `Database` (opcional): base del cliente, **sin servidor ni contraseña** (`Port` es 5432 si no se pone). El
+  servidor lo mete el pipeline al compilar desde el secreto `DB_HOST` del environment del cliente (`-p:DbHost`), para que no esté en el
+  código. Con él, en una versión publicada (Release), la primera vez que se abre la app en un equipo sale la pantalla
+  «Conexión con la base de datos», que solo pide la contraseña, la prueba (con TLS verificando el certificado) y la
+  guarda en `%LOCALAPPDATA%\QuickInventory\appsettings.json`. Vuelve a salir si la contraseña guardada deja de
+  servir. **En Debug nunca sale**: la conexión viene siempre de `appsettings.json`.
 
 El `client.json` va **dentro del ejecutable**: el client no puede cambiarlo, y para cambiar algo hay que volver a
 compilar. Si tiene algún error, la app avisa al arrancar y se cierra.
 
-La **conexión** no va en `client.json`, porque lleva la contraseña: se pone en `clients/<id>/appsettings.json`
-(mismo formato que en [Conexión](#conexión), está en `.gitignore`) y se copia junto al `.exe`. Si no existe, cada
-equipo usa su `%LOCALAPPDATA%\QuickInventory\appsettings.json` como siempre.
+La **contraseña** nunca va en `client.json`. Para desarrollar, la conexión completa puede ir en
+`clients/<id>/appsettings.json` (mismo formato que en [Conexión](#conexión), está en `.gitignore`), que se copia
+junto al `.exe` y tiene preferencia sobre la pantalla de contraseña.
 
 Para generar el ejecutable de un client (sirve también desde Linux/WSL):
 

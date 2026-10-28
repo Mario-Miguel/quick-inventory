@@ -59,7 +59,7 @@ public static class DataConfiguration
         }
         catch (PostgresException ex) when (ex.SqlState is PostgresErrorCodes.InvalidPassword or PostgresErrorCodes.InvalidAuthorizationSpecification)
         {
-            throw new BusinessRuleException("No se puede entrar en la base de datos: el usuario o la contraseña no son correctos.");
+            throw new DatabaseLoginException("No se puede entrar en la base de datos: el usuario o la contraseña no son correctos.");
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidCatalogName)
         {

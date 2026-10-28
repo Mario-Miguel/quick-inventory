@@ -5,7 +5,10 @@ namespace QuickInventory.Core.Models;
 /// los datos fiscales. Sale de <c>clientes/&lt;id&gt;/cliente.json</c> y va dentro del ejecutable
 /// (se elige al compilar con <c>-p:Cliente=&lt;id&gt;</c>), así que el cliente no puede cambiarla.
 /// </summary>
-/// <remarks>No lleva la conexión a la base de datos: tiene contraseña y va en appsettings.json.</remarks>
+/// <remarks>
+/// No lleva la contraseña de la base de datos: la escribe quien instala la app en cada equipo
+/// (ver <see cref="Database"/>) y se guarda en appsettings.json.
+/// </remarks>
 public sealed class ClientSettings
 {
     /// <summary>Nombre que sale en la barra superior y en el título de la ventana.</summary>
@@ -21,10 +24,17 @@ public sealed class ClientSettings
     /// </summary>
     public Issuer? Issuer { get; set; }
 
+    /// <summary>
+    /// Base de datos del cliente, sin la contraseña (opcional). Si está, la primera vez que se abre la app
+    /// en un equipo solo se pide la contraseña. Si no, la conexión tiene que venir de appsettings.json.
+    /// </summary>
+    public ClientDatabase? Database { get; set; }
+
     public void Normalize()
     {
         AppName = AppName?.Trim() ?? "";
         Issuer?.Normalize();
+        Database?.Normalize();
     }
 
     /// <exception cref="BusinessRuleException">Si falta algo o un color no es válido.</exception>
@@ -36,6 +46,7 @@ public sealed class ClientSettings
         CheckColor(Colors.Secondary, nameof(ClientColors.Secondary));
         CheckColor(Colors.Background, nameof(ClientColors.Background));
         Issuer?.Validate();
+        Database?.Validate();
     }
 
     private static void CheckColor(string? color, string name)
@@ -46,6 +57,36 @@ public sealed class ClientSettings
 
     private static bool IsHexColor(string? color) =>
         color is { Length: 7 } && color[0] == '#' && color.Skip(1).All(char.IsAsciiHexDigit);
+}
+
+/// <summary>Dónde está la base de datos del cliente. La contraseña nunca va aquí.</summary>
+public sealed class ClientDatabase
+{
+    /// <summary>
+    /// Servidor. No se escribe en client.json (el repo es público): lo mete el pipeline al compilar
+    /// desde el secreto DB_HOST (-p:DbHost). Sin él no se puede pedir solo la contraseña.
+    /// </summary>
+    public string Host { get; set; } = "";
+    public int Port { get; set; } = 5432;
+    /// <summary>Nombre de la base de datos en el servidor.</summary>
+    public string Name { get; set; } = "";
+    /// <summary>Usuario de la aplicación (museo_app), sin permiso para cambiar el esquema.</summary>
+    public string Username { get; set; } = "";
+
+    public void Normalize()
+    {
+        Host = Host?.Trim() ?? "";
+        Name = Name?.Trim() ?? "";
+        Username = Username?.Trim() ?? "";
+    }
+
+    public void Validate()
+    {
+        if (Name.Length == 0 || Username.Length == 0)
+            throw new BusinessRuleException("En Database faltan Name o Username.");
+        if (Port is < 1 or > 65535)
+            throw new BusinessRuleException("El puerto de la base de datos (Database.Port) no es válido.");
+    }
 }
 
 public sealed class ClientColors
