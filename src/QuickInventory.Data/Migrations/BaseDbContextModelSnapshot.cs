@@ -171,6 +171,37 @@ namespace QuickInventory.Data.Migrations
                     b.ToTable("Issuers");
                 });
 
+            modelBuilder.Entity("QuickInventory.Core.Models.OnlineShopSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ApiKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("DaysInAdvance")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TicketProductIds")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("OnlineShopSettings");
+                });
+
             modelBuilder.Entity("QuickInventory.Core.Models.Product", b =>
                 {
                     b.Property<int>("Id")

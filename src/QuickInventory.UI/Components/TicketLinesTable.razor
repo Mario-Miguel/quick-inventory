@@ -1,0 +1,44 @@
+@* Líneas de pedidos de la tienda online: una fila por cada entrada (o grupo de entradas) de un pedido. *@
+<MudSimpleTable Dense="true" Outlined="true" Hover="true">
+    <thead>
+        <tr>
+            <th>Pedido</th>
+            @if (ShowOrderDate)
+            {
+                <th>Comprado</th>
+            }
+            else
+            {
+                <th>Hora</th>
+            }
+            <th>Entrada</th>
+            <th style="text-align:right">Cantidad</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var ticket in Tickets)
+        {
+            <tr>
+                <td style="white-space:nowrap">@ticket.OrderReference</td>
+                @if (ShowOrderDate)
+                {
+                    <td style="white-space:nowrap">@ticket.OrderDate.ToString("dd/MM/yyyy HH:mm")</td>
+                    @* Sin fecha reconocida: se enseña el nombre completo para ver qué ha elegido el cliente. *@
+                    <td>@ticket.ProductName</td>
+                }
+                else
+                {
+                    <td>@(ticket.VisitTime?.ToString("HH:mm") ?? "—")</td>
+                    <td>@ticket.Type</td>
+                }
+                <td style="text-align:right">@ticket.Quantity</td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<OnlineTicket> Tickets { get; set; } = [];
+    /// <summary>Muestra cuándo se compró en vez de la hora de la visita.</summary>
+    [Parameter] public bool ShowOrderDate { get; set; }
+}

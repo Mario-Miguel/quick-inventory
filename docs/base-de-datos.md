@@ -96,20 +96,29 @@ erDiagram
         varchar LegalName "nombre o razón social"
         varchar Address "opcional"
     }
+
+    OnlineShopSettings {
+        INTEGER Id PK "una sola fila"
+        TEXT Url "dirección de PrestaShop"
+        TEXT ApiKey "clave del Webservice (solo GET en orders)"
+        TEXT TicketProductIds "ids separados por comas; vacío = todos"
+        INTEGER DaysInAdvance "antelación máxima de compra"
+    }
 ```
 
 ## Tablas
 
-| Tabla            | Modelo (`QuickInventory.Core/Models`) | Para qué sirve                                                                                           |
-| ---------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `Products`       | `Product`                             | Todo lo que se vende: entradas (Taquilla) y artículos (Tienda).                                          |
-| `Sales`          | `Sale`                                | Una venta: fecha, punto de venta, método de pago y total.                                                |
-| `SaleLines`      | `SalesLine`                           | Cada producto de una venta, con nombre y precios **copiados** del momento de la venta.                   |
-| `StockMovements` | `StockMovement`                       | Historial de cada cambio de stock (ajustes, ventas, anulaciones).                                        |
-| `CashMovements`  | `CashMovement`                        | Dinero que entra o sale y no es una venta. Hoy solo reembolsos (`Category = "Reembolso"`, `Type = Pay`). |
-| `InvoiceFiles`   | `InvoiceFile`                         | Factura escaneada de un `CashMovement`. Tabla aparte para no cargar el archivo al listar.                |
-| `Issuers`        | `Issuer`                              | Titular del museo (quien emite las facturas). Una sola fila, creada por el asistente de primera instalación. |
-| `__EFMigrationsHistory` | —                              | Migraciones aplicadas. La gestiona EF; la app solo la lee para comprobar la versión.                     |
+| Tabla                   | Modelo (`QuickInventory.Core/Models`)      | Para qué sirve                                                                                                                                  |
+| ----------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Products`              | `Product` (`TicketProduct`, `ShopProduct`) | Todo lo que se vende: entradas (Taquilla) y artículos (Tienda). Una sola tabla; `Type` dice cuál es y las columnas del otro tipo quedan a null. |
+| `Sales`                 | `Sale`                                     | Una venta: fecha, punto de venta, método de pago y total.                                                                                       |
+| `SaleLines`             | `SalesLine`                                | Cada producto de una venta, con nombre y precios **copiados** del momento de la venta.                                                          |
+| `StockMovements`        | `StockMovement`                            | Historial de cada cambio de stock (ajustes, ventas, anulaciones).                                                                               |
+| `CashMovements`         | `CashMovement`                             | Dinero que entra o sale y no es una venta. Hoy solo reembolsos (`Category = "Reembolso"`, `Type = Pay`).                                        |
+| `InvoiceFiles`          | `InvoiceFile`                              | Factura escaneada de un `CashMovement`. Tabla aparte para no cargar el archivo al listar.                                                       |
+| `OnlineShopSettings`    | `OnlineShopSettings`                       | Conexión con la tienda online (PrestaShop). Las entradas online (`OnlineTicket`) no se guardan: se leen de la tienda cada vez.                  |
+| `Issuers`               | `Issuer`                                   | Titular del museo (quien emite las facturas). Una sola fila, creada por el asistente de primera instalación.                                    |
+| `__EFMigrationsHistory` | —                                          | Migraciones aplicadas. La gestiona EF; la app solo la lee para comprobar la versión.                                                            |
 
 ## Relaciones
 

@@ -108,8 +108,6 @@ body {
 /* Aviso de error de Blazor */
 #blazor-error-ui {
   background: #fef3c7;
-  /* Negro fijo: el fondo es siempre claro, también con el tema oscuro. */
-  color: #000;
   bottom: 0;
   box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
   display: none;
@@ -118,10 +116,6 @@ body {
   position: fixed;
   width: 100%;
   z-index: 2000;
-}
-
-#blazor-error-ui a {
-  color: inherit;
 }
 
 #blazor-error-ui .reload {
@@ -137,57 +131,48 @@ body {
 
 /* Resumen de la venta: cabecera y pie fijos, la lista hace scroll. */
 .sale-summary {
-    display: flex;
-    flex-direction: column;
+  display: flex;
+  flex-direction: column;
 }
 
 .sale-summary-lines {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Inicio: ocupa todo el alto disponible para poder llevar el resumen abajo.
    64px de la barra superior + 48px del padding (py-6) del contenedor. */
 .home-page {
-    display: flex;
-    flex-direction: column;
-    min-height: calc(100vh - 64px - 48px);
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 64px - 48px);
 }
 
 /* Fila con el detalle de una venta: sin el fondo de hover de la tabla principal
    (MudBlazor lo aplica también a cualquier tr impar en tablas con rayas). */
 .mud-table-hover .sale-detail-row:hover {
-    background-color: transparent !important;
+  background-color: transparent !important;
 }
 
 /* Campo de cantidad del recuento de caja: estrecho, sin crecer, y el número centrado. */
 .count-input.mud-input-control {
-    flex: 0 0 64px;
-    width: 64px;
-    margin-top: 0;
+  flex: 0 0 64px;
+  width: 64px;
+  margin-top: 0;
 }
 
 .count-input input {
-    text-align: center;
+  text-align: center;
 }
 
 /* Venta anulada en Estadísticas: fondo rojo suave, también en filas con rayas y al pasar el ratón. */
 .mud-table-row.sale-canceled-row {
-    background-color: color-mix(in srgb, var(--mud-palette-error) 20%, transparent) !important;
+  background-color: color-mix(in srgb, var(--mud-palette-error) 20%, transparent) !important;
 }
 
 .mud-table-row.sale-canceled-row:hover {
-    background-color: color-mix(in srgb, var(--mud-palette-error) 30%, transparent) !important;
-}
-
-/* Producto sin IVA en el inventario: fondo naranja suave, también en filas con rayas y al pasar el ratón. */
-.mud-table-row.product-no-tax-row {
-    background-color: color-mix(in srgb, var(--mud-palette-warning) 15%, transparent) !important;
-}
-
-.mud-table-row.product-no-tax-row:hover {
-    background-color: color-mix(in srgb, var(--mud-palette-warning) 25%, transparent) !important;
+  background-color: color-mix(in srgb, var(--mud-palette-error) 30%, transparent) !important;
 }
 
 /* Exportar ventas: ancho fijo para que las flechas no se muevan al cambiar de mes. */
@@ -200,17 +185,76 @@ body {
   text-transform: uppercase;
 }
 
-/* Asistente de la primera instalación */
-.first-run {
-  max-width: 760px;
+/* Entradas online: calendario del mes, de lunes a domingo. */
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
 }
 
-/* Aviso de que no hay conexión con la base de datos (tapa toda la aplicación) */
-.connection-lost {
-  max-width: 560px;
+.calendar-weekday {
   text-align: center;
+  font-weight: 600;
+  color: #4b5563;
+  padding-bottom: 4px;
 }
 
-.connection-lost-icon {
-  font-size: 4rem !important;
+.calendar-day {
+  min-height: 80px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calendar-day:hover {
+  border-color: var(--mud-palette-primary-lighten);
+}
+
+.calendar-day-outside {
+  border: none;
+  background: transparent;
+  cursor: default;
+}
+
+.calendar-day-selected,
+.calendar-day-selected:hover {
+  border-color: var(--mud-palette-primary);
+  box-shadow: 0 0 0 2px var(--mud-palette-primary);
+}
+
+.calendar-day-number {
+  font-weight: 600;
+}
+
+.calendar-day-today .calendar-day-number {
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--mud-palette-primary);
+  color: var(--mud-palette-primary-text);
+  align-self: flex-start;
+}
+
+.calendar-day-count {
+  margin-top: auto;
+  align-self: flex-end;
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Tabla de horas del día: con muchos tipos de entrada hace scroll en horizontal. */
+.online-hours {
+  overflow-x: auto;
+}
+
+.online-hours-total td {
+  font-weight: 700;
+  border-top: 2px solid #d1d5db;
 }
