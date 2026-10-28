@@ -27,9 +27,9 @@ public static class SalesExport
 
         string[] headers =
         [
-            "ID", "Fecha", "Hora", "Punto de venta", "Método de pago", "Productos",
+            "ID", "Nº factura", "Fecha", "Hora", "Punto de venta", "Método de pago", "Productos",
             .. saleFields.Select(f => f.Header),
-            "Anulada", "Total",
+            "Anulada", "IVA", "Base imponible", "Cuota IVA", "Total",
         ];
 
         var csv = new StringBuilder();
@@ -40,6 +40,7 @@ public static class SalesExport
             string[] fields =
             [
                 sale.Id.ToString(spanish),
+                sale.InvoiceId ?? "",
                 sale.Date.ToString("dd/MM/yyyy", spanish),
                 sale.Date.ToString("HH:mm", spanish),
                 ActiveProfile.Name(sale.SalesPoint),
@@ -47,6 +48,9 @@ public static class SalesExport
                 Products(sale),
                 .. saleFields.Select(f => f.Text(sale)),
                 YesNo(sale.Canceled),
+                TaxNames(sale),
+                TaxBase(sale)?.ToString("0.00", spanish) ?? "",
+                TaxAmount(sale)?.ToString("0.00", spanish) ?? "",
                 sale.Total.ToString("0.00", spanish),
             ];
             csv.AppendLine(string.Join(';', fields.Select(Escape)));
@@ -57,7 +61,8 @@ public static class SalesExport
 
     /// <summary>
     /// Libro de Excel con una hoja por punto de venta ("Taquilla" y "Tienda"), para llevar
-    /// las cuentas por separado, y otra con los reembolsos. Cada hoja acaba con una fila con su total.
+    /// las cuentas por separado, otra con el desglose del IVA y otra con los reembolsos.
+    /// Cada hoja acaba con una fila con su total.
     /// </summary>
     /// <param name="invoicePaths">
     /// Ruta relativa al Excel de la factura de cada reembolso (por su Id). Si se pasa, la
@@ -74,6 +79,7 @@ public static class SalesExport
         foreach (var saleType in SaleTypes.All)
             AddSheet(book, saleType, [.. sales.Where(s => s.SalesPoint == saleType.SalesPoint)]);
 
+        AddTaxSheet(book, [.. sales]);
         AddRefundsSheet(book, [.. refunds], invoicePaths);
 
         using var stream = new MemoryStream();
@@ -106,6 +112,7 @@ public static class SalesExport
         List<ExcelColumn> columns =
         [
             new("ID", s => s.Id, null),
+            new("Nº factura", s => s.InvoiceId ?? "", null),
             new("Fecha", s => s.Date.Date, null, "dd/mm/yyyy"),
             new("Hora", s => s.Date.ToString("HH:mm"), null),
             new("Método de pago", s => PaymentMethods.Name(s.PaymentMethod), null),
@@ -119,6 +126,11 @@ public static class SalesExport
             new("Precio", s => s.Lines.Sum(l => l.Amount * l.BasePrice), (_, l) => l.BasePrice, EurosFormat),
             new("Descuento", s => Discounts(s), (s, l) => Discount(s, l)),
             new("Descontado", s => s.Lines.Sum(l => l.DiscountTotal), (_, l) => l.DiscountTotal, EurosFormat),
+            // La base y la cuota solo van en la fila de la venta: se calculan por tipo sobre el total,
+            // no línea a línea, y es lo que cuenta en la factura.
+            new("IVA", s => TaxNames(s), (_, l) => TaxNames(l)),
+            new(TaxBaseHeader, s => Cell(TaxBase(s)), null, EurosFormat),
+            new(TaxAmountHeader, s => Cell(TaxAmount(s)), null, EurosFormat),
             new("Total", s => s.Total, (_, l) => l.Subtotal, EurosFormat),
         ];
 
@@ -153,15 +165,18 @@ public static class SalesExport
                 sheet.Rows(saleRow.RowNumber(), row - 1).Style.Font.FontColor = XLColor.Gray;
         }
 
-        // Total de las ventas exportadas de este punto de venta, sin contar las anuladas.
-        
-        var cancelledColumn = columns.FindIndex(c => c.Header == "Anulada") + 1;
-        var totalColumn = sheet.Column(columns.Count).ColumnLetter();
-        var canceled = sheet.Column(cancelledColumn).ColumnLetter();
+        // Totales de las ventas exportadas de este punto de venta, sin contar las anuladas. Las filas de
+        // productos tienen "Anulada" vacía, así que tampoco se suman.
+        var canceled = sheet.Column(columns.FindIndex(c => c.Header == "Anulada") + 1).ColumnLetter();
+        var firstSummed = columns.FindIndex(c => c.Header == TaxBaseHeader) + 1;
 
-
-        sheet.Cell(row, columns.Count - 1).Value = "Total";
-        sheet.Cell(row, totalColumn).FormulaA1 = $"SUMIFS({totalColumn}2:{totalColumn}{row-1},{canceled}2:{canceled}{row-1},\"{YesNo(false)}\")";
+        sheet.Cell(row, firstSummed - 1).Value = "Total";
+        for (var column = firstSummed; column <= columns.Count; column++)
+        {
+            var letter = sheet.Column(column).ColumnLetter();
+            sheet.Cell(row, column).FormulaA1 =
+                $"SUMIFS({letter}2:{letter}{row - 1},{canceled}2:{canceled}{row - 1},\"{YesNo(false)}\")";
+        }
         sheet.Row(row).Style.Font.Bold = true;
 
         for (var column = 0; column < columns.Count; column++)
@@ -169,6 +184,63 @@ public static class SalesExport
                 sheet.Column(column + 1).Style.NumberFormat.Format = format;
 
         sheet.Outline.SummaryVLocation = XLOutlineSummaryVLocation.Top;
+        sheet.Row(1).Style.Font.Bold = true;
+        sheet.SheetView.FreezeRows(1);
+        sheet.Columns().AdjustToContents();
+    }
+
+    private const string TaxBaseHeader = "Base imponible";
+    private const string TaxAmountHeader = "Cuota IVA";
+
+    /// <summary>
+    /// Hoja "IVA": base, cuota y total por punto de venta y tipo de IVA, sumando el desglose de cada
+    /// venta (que es lo que figura en cada factura). No cuenta las ventas anuladas. Sale siempre,
+    /// aunque no haya ventas, para que el libro tenga siempre la misma forma.
+    /// </summary>
+    private static void AddTaxSheet(XLWorkbook book, List<Sale> sales)
+    {
+        var sheet = book.Worksheets.Add("IVA");
+
+        string[] headers = ["Punto de venta", "IVA", "Ventas", TaxBaseHeader, TaxAmountHeader, "Total"];
+        for (var column = 0; column < headers.Length; column++)
+            sheet.Cell(1, column + 1).Value = headers[column];
+
+        var groups = sales
+            .Where(s => !s.Canceled)
+            .SelectMany(s => TaxBreakdown.Calculate(s.Lines).Select(item => (s.SalesPoint, Item: item)))
+            .GroupBy(x => (x.SalesPoint, x.Item.Name))
+            .OrderBy(g => g.Key.SalesPoint)
+            .ThenBy(g => g.Min(x => x.Item.TaxRate is not null ? 0 : x.Item.TaxExemption is not null ? 1 : 2))
+            .ThenByDescending(g => g.Max(x => x.Item.TaxRate));
+
+        var row = 2;
+        foreach (var group in groups)
+        {
+            var items = group.Select(x => x.Item).ToList();
+            var hasTax = items.All(i => i.TaxBase is not null);
+            XLCellValue[] values =
+            [
+                ActiveProfile.Name(group.Key.SalesPoint),
+                group.Key.Name,
+                items.Count,
+                hasTax ? items.Sum(i => i.TaxBase!.Value) : Blank.Value,
+                hasTax ? items.Sum(i => i.TaxAmount!.Value) : Blank.Value,
+                items.Sum(i => i.Total),
+            ];
+            for (var column = 0; column < values.Length; column++)
+                sheet.Cell(row, column + 1).Value = values[column];
+            row++;
+        }
+
+        sheet.Cell(row, 3).Value = "Total";
+        foreach (var column in new[] { 4, 5, 6 })
+        {
+            var letter = sheet.Column(column).ColumnLetter();
+            sheet.Cell(row, column).FormulaA1 = $"SUM({letter}2:{letter}{row - 1})";
+            sheet.Column(column).Style.NumberFormat.Format = EurosFormat;
+        }
+        sheet.Row(row).Style.Font.Bold = true;
+
         sheet.Row(1).Style.Font.Bold = true;
         sheet.SheetView.FreezeRows(1);
         sheet.Columns().AdjustToContents();
@@ -288,6 +360,28 @@ public static class SalesExport
     
     public static string Discounts(Sale sale) => 
     string.Join(" + ", sale.Lines.Select(l=>Discount(sale, l)).Where(d => d!="").Distinct());
+
+    /// <summary>Tipos de IVA de una venta, por ejemplo "21 % + Exento (E1)".</summary>
+    public static string TaxNames(Sale sale) => TaxNames(sale.Lines);
+
+    private static string TaxNames(SalesLine line) => TaxNames([line]);
+
+    private static string TaxNames(IEnumerable<SalesLine> lines) =>
+        string.Join(" + ", TaxBreakdown.Calculate(lines).Select(i => i.Name));
+
+    /// <summary>Base imponible de la venta, o null si alguna línea no tiene IVA indicado (ventas antiguas).</summary>
+    private static decimal? TaxBase(Sale sale) => SumIfAllHaveTax(sale, i => i.TaxBase);
+
+    /// <summary>Cuota de IVA de la venta, o null si alguna línea no tiene IVA indicado (ventas antiguas).</summary>
+    private static decimal? TaxAmount(Sale sale) => SumIfAllHaveTax(sale, i => i.TaxAmount);
+
+    private static decimal? SumIfAllHaveTax(Sale sale, Func<TaxBreakdownItem, decimal?> value)
+    {
+        var items = TaxBreakdown.Calculate(sale.Lines);
+        return items.Any(i => value(i) is null) ? null : items.Sum(i => value(i)!.Value);
+    }
+
+    private static XLCellValue Cell(decimal? value) => value is { } v ? v : Blank.Value;
 
     private static string YesNo(bool value) => value ? "Sí" : "No";
 

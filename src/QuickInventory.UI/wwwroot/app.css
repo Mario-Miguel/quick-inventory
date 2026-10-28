@@ -108,6 +108,8 @@ body {
 /* Aviso de error de Blazor */
 #blazor-error-ui {
   background: #fef3c7;
+  /* Negro fijo: el fondo es siempre claro, también con el tema oscuro. */
+  color: #000;
   bottom: 0;
   box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
   display: none;
@@ -116,6 +118,10 @@ body {
   position: fixed;
   width: 100%;
   z-index: 2000;
+}
+
+#blazor-error-ui a {
+  color: inherit;
 }
 
 #blazor-error-ui .reload {
@@ -175,6 +181,15 @@ body {
     background-color: color-mix(in srgb, var(--mud-palette-error) 30%, transparent) !important;
 }
 
+/* Producto sin IVA en el inventario: fondo naranja suave, también en filas con rayas y al pasar el ratón. */
+.mud-table-row.product-no-tax-row {
+    background-color: color-mix(in srgb, var(--mud-palette-warning) 15%, transparent) !important;
+}
+
+.mud-table-row.product-no-tax-row:hover {
+    background-color: color-mix(in srgb, var(--mud-palette-warning) 25%, transparent) !important;
+}
+
 /* Exportar ventas: ancho fijo para que las flechas no se muevan al cambiar de mes. */
 .export-month {
   min-width: 200px;
@@ -183,4 +198,19 @@ body {
 
 .export-month::first-letter {
   text-transform: uppercase;
+}
+
+/* Asistente de la primera instalación */
+.first-run {
+  max-width: 760px;
+}
+
+/* Aviso de que no hay conexión con la base de datos (tapa toda la aplicación) */
+.connection-lost {
+  max-width: 560px;
+  text-align: center;
+}
+
+.connection-lost-icon {
+  font-size: 4rem !important;
 }

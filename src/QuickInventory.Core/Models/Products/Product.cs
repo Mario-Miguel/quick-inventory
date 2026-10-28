@@ -46,6 +46,12 @@ public abstract class Product
     public decimal SalePrice { get; set; }
     public DateTime RegistrationDate { get; set; }
 
+    public TaxRate? TaxRate { get; set; }
+    public TaxExemption? TaxExemption { get; set; }
+
+    /// <summary>Si tiene el IVA indicado (tipo o exención). Sin él no se puede vender.</summary>
+    public bool HasTax => TaxRate is not null || TaxExemption is not null;
+
     public abstract ProductCategory Category { get; }
     // public virtual bool StockControl => false;
 
@@ -66,11 +72,17 @@ public abstract class Product
             throw new BusinessRuleException("El producto necesita un nombre.");
         if (SalePrice < 0)
             throw new BusinessRuleException("Los precios no pueden ser negativos.");
+        if (TaxRate is null && TaxExemption is null)
+            throw new BusinessRuleException("Indica el IVA del producto o, si está exento, el motivo.");
+        if (TaxRate is not null && TaxExemption is not null)
+            throw new BusinessRuleException("Un producto exento no puede tener tipo de IVA.");
     }
 
     public virtual void CopyFrom(Product other)
     {
         Name = other.Name;
         SalePrice = other.SalePrice;
+        TaxRate = other.TaxRate;
+        TaxExemption = other.TaxExemption;
     }
 }

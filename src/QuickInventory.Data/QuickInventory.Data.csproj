@@ -1,19 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Acceso a datos con Entity Framework Core.
-       Hoy usa SQLite (un archivo local); en la versión web bastará con cambiar
-       el proveedor a PostgreSQL o SQL Server. -->
+  <!-- Acceso a datos con Entity Framework Core sobre PostgreSQL.
+       Todos los equipos comparten la misma base de datos (en la nube; en desarrollo, un Docker local). -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>QuickInventory.Data</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.*" />
+    <ProjectReference Include="..\QuickInventory.Core\QuickInventory.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\QuickInventory.Core\QuickInventory.Core.csproj" />
+    <!-- Solo para "dotnet ef" (migraciones); no se distribuye con la app. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.*">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <!-- Explícito para que Desktop use la misma versión de EF que "Design" (si no, Npgsql trae una más antigua). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.*" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.*" />
   </ItemGroup>
 
 </Project>

@@ -24,10 +24,24 @@ else
                       AutoFocus="true" Variant="Variant.Outlined" Class="finder" />
         <MudSwitch T="bool" @bind-Value="lowStockOnly" Color="Color.Warning"
                    Label="@($"Solo stock bajo ({LowStockNum})")" />
+        @if (NoTaxNum > 0)
+        {
+            <MudSwitch T="bool" @bind-Value="noTaxOnly" Color="Color.Warning"
+                       Label="@($"Solo sin IVA ({NoTaxNum})")" />
+        }
     </MudPaper>
 
+    @if (NoTaxNum > 0)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
+            @(NoTaxNum == 1 ? "Hay 1 producto" : $"Hay {NoTaxNum} productos") sin IVA. No se podrán vender hasta que
+            lo indiques: pulsa el lápiz y elige el IVA o, si está exento, el motivo.
+        </MudAlert>
+    }
+
     <MudTable T="Product" Items="products" Filter="new Func<Product, bool>(Filter)" Hover="true" Striped="true"
-              Elevation="1" RowsPerPage="25" Breakpoint="Breakpoint.Sm">
+              Elevation="1" RowsPerPage="25" Breakpoint="Breakpoint.Sm"
+              RowClassFunc="@((p, _) => p.HasTax ? "" : "product-no-tax-row")">
         <HeaderContent>
             <MudTh>
                 <MudTableSortLabel T="Product" SortBy="p => p.Name" InitialDirection="SortDirection.Ascending">Producto
@@ -38,6 +52,9 @@ else
             </MudTh>
             <MudTh Style="text-align:right">
                 <MudTableSortLabel T="Product" SortBy="p => p.SalePrice">Precio</MudTableSortLabel>
+            </MudTh>
+            <MudTh>
+                <MudTableSortLabel T="Product" SortBy="TaxSortKey">IVA</MudTableSortLabel>
             </MudTh>
             <MudTh Style="text-align:right">
                 <MudTableSortLabel T="Product" SortBy="p => p is ShopProduct shopProduct ? shopProduct.Stock : 0">Stock
@@ -62,6 +79,24 @@ else
             </MudTd>
             <MudTd DataLabel="Categoría">@context.Category.Name</MudTd>
             <MudTd DataLabel="Precio" Style="text-align:right">@context.SalePrice.ToString("C")</MudTd>
+            <MudTd DataLabel="IVA">
+                @if (context.TaxRate is not null)
+                {
+                    @context.TaxRate.Name
+                }
+                else if (context.TaxExemption is not null)
+                {
+                    <MudTooltip Text="@context.TaxExemption.Description">
+                        Exento (@context.TaxExemption.Value)
+                    </MudTooltip>
+                }
+                else
+                {
+                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.Warning">
+                        Sin IVA
+                    </MudChip>
+                }
+            </MudTd>
             <MudTd DataLabel="Stock" Style="text-align:right">
                 @switch (context)
                 {
@@ -110,8 +145,16 @@ else
     private List<Product>? products;
     private string searching = "";
     private bool lowStockOnly;
+    private bool noTaxOnly;
 
     private int LowStockNum => products?.Count(p => p is ShopProduct { LowStock: true }) ?? 0;
+    private int NoTaxNum => products?.Count(p => !p.HasTax) ?? 0;
+
+    // Orden de la columna IVA: primero los que no lo tienen, luego los exentos y después de menor a mayor tipo.
+    private static object TaxSortKey(Product p) =>
+        p.TaxRate is not null ? 2000 + p.TaxRate.Value
+        : p.TaxExemption is not null ? 1000m
+        : 0m;
 
     private static readonly DialogOptions CustomDialogOptions = new()
     {
@@ -128,6 +171,7 @@ else
     {
         // Las entradas no llevan stock: con el filtro activado no salen.
         if (lowStockOnly && p is not ShopProduct { LowStock: true }) return false;
+        if (noTaxOnly && p.HasTax) return false;
         if (string.IsNullOrWhiteSpace(searching)) return true;
 
         var texto = searching.Trim();

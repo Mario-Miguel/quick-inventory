@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Ejemplo de «Veri-Factu_Descripcion_SWeb.pdf» (v1.0.3), apartado 11.1.1.1. -->
+<env:Envelope xmlns:env="http://schemas.xmlsoap.org/soap/envelope/">
+  <env:Header/>
+  <env:Body Id="Body">
+    <tikLRRC:RespuestaConsultaFactuSistemaFacturacion xmlns:tikLRRC="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/RespuestaConsultaLR.xsd" xmlns:tik="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroInformacion.xsd">
+      <tikLRRC:Cabecera>
+        <tik:IDVersion>1.0</tik:IDVersion>
+        <tik:ObligadoEmision>
+          <tik:NombreRazon>EMPRESAXXXX</tik:NombreRazon>
+          <tik:NIF>XXXXXXXXX</tik:NIF>
+        </tik:ObligadoEmision>
+      </tikLRRC:Cabecera>
+      <tikLRRC:PeriodoImputacion>
+        <tikLRRC:Ejercicio>2024</tikLRRC:Ejercicio>
+        <tikLRRC:Periodo>11</tikLRRC:Periodo>
+      </tikLRRC:PeriodoImputacion>
+      <tikLRRC:IndicadorPaginacion>N</tikLRRC:IndicadorPaginacion>
+      <tikLRRC:ResultadoConsulta>ConDatos</tikLRRC:ResultadoConsulta>
+      <tikLRRC:RegistroRespuestaConsultaFactuSistemaFacturacion>
+        <tikLRRC:IDFactura>
+          <tik:IDEmisorFactura>XXXXXXXXX</tik:IDEmisorFactura>
+          <tik:NumSerieFactura>88</tik:NumSerieFactura>
+          <tik:FechaExpedicionFactura>27-11-2024</tik:FechaExpedicionFactura>
+        </tikLRRC:IDFactura>
+        <tikLRRC:DatosRegistroFacturacion>
+          <tikLRRC:TipoFactura>F1</tikLRRC:TipoFactura>
+          <tikLRRC:DescripcionOperacion>Servicios de reparación</tikLRRC:DescripcionOperacion>
+          <tikLRRC:Destinatarios>
+            <tikLRRC:IDDestinatario>
+              <tik:NombreRazon>yyyyyyyyyyyyy</tik:NombreRazon>
+              <tik:NIF>A84532509</tik:NIF>
+            </tikLRRC:IDDestinatario>
+          </tikLRRC:Destinatarios>
+          <tikLRRC:Cupon>N</tikLRRC:Cupon>
+          <tikLRRC:Desglose>
+            <tik:DetalleDesglose>
+              <tik:Impuesto>01</tik:Impuesto>
+              <tik:ClaveRegimen>01</tik:ClaveRegimen>
+              <tik:CalificacionOperacion>S1</tik:CalificacionOperacion>
+              <tik:TipoImpositivo>4</tik:TipoImpositivo>
+              <tik:BaseImponibleOimporteNoSujeto>1044.03</tik:BaseImponibleOimporteNoSujeto>
+              <tik:CuotaRepercutida>41.76</tik:CuotaRepercutida>
+            </tik:DetalleDesglose>
+          </tikLRRC:Desglose>
+          <tikLRRC:CuotaTotal>41.76</tikLRRC:CuotaTotal>
+          <tikLRRC:ImporteTotal>16976.37</tikLRRC:ImporteTotal>
+          <tikLRRC:Encadenamiento>
+            <tikLRRC:RegistroAnterior>
+              <tik:IDEmisorFactura>XXXXXXXXX</tik:IDEmisorFactura>
+              <tik:NumSerieFactura>87</tik:NumSerieFactura>
+              <tik:FechaExpedicionFactura>27-11-2024</tik:FechaExpedicionFactura>
+              <tik:Huella>3C464DAF61ACB827C65FDA19F352A4E3BDC2C640E9E9FC4CC058073F38F12F60</tik:Huella>
+            </tikLRRC:RegistroAnterior>
+          </tikLRRC:Encadenamiento>
+          <tikLRRC:FechaHoraHusoGenRegistro>2024-11-27T11:54:10+01:00</tikLRRC:FechaHoraHusoGenRegistro>
+          <tikLRRC:TipoHuella>01</tikLRRC:TipoHuella>
+          <tikLRRC:Huella>DAA7F72EEDC1AE8A294B7A011EC4A1EC2BE0E4DDB79AF3758377F8D61F38FE6B</tikLRRC:Huella>
+        </tikLRRC:DatosRegistroFacturacion>
+        <tikLRRC:DatosPresentacion>
+          <tik:NIFPresentador>89890002E</tik:NIFPresentador>
+          <tik:TimestampPresentacion>2024-11-13T11:54:10+01:00</tik:TimestampPresentacion>
+          <tik:IdPeticion>20241113115410360242</tik:IdPeticion>
+        </tikLRRC:DatosPresentacion>
+        <tikLRRC:EstadoRegistro>
+          <tikLRRC:TimestampUltimaModificacion>2024-11-27T11:54:10+01:00</tikLRRC:TimestampUltimaModificacion>
+          <tikLRRC:EstadoRegistro> Correcta </tikLRRC:EstadoRegistro>
+        </tikLRRC:EstadoRegistro>
+      </tikLRRC:RegistroRespuestaConsultaFactuSistemaFacturacion>
+    </tikLRRC:RespuestaConsultaFactuSistemaFacturacion >
+  </env:Body>
+</env:Envelope>

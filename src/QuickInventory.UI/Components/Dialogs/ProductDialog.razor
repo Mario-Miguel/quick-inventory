@@ -57,6 +57,33 @@
                         </div>
                         break;
                 }
+                <MudSwitch T="bool" Value="hasTaxExemption" ValueChanged="ChangeHasTaxExemption" Color="Color.Primary"
+                           Class="mt-4">
+                    Exento de impuestos
+                </MudSwitch>
+                
+                @if (!hasTaxExemption)
+                {
+                    <MudSelect T="TaxRate" Value="product.TaxRate" ValueChanged="ChangeTaxRate" Label="IVA"
+                               ToStringFunc="t => t?.Name" Variant="Variant.Outlined" Required="true"
+                               RequiredError="Elige el IVA aplicable">
+                        @foreach (var taxRate in TaxRate.All)
+                        {
+                            <MudSelectItem Value="taxRate">@taxRate.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                else
+                {
+                    <MudSelect T="TaxExemption" Value="product.TaxExemption" ValueChanged="ChangeTaxExemption"
+                               Label="Tipo de exención" ToStringFunc="t => t?.Description" Variant="Variant.Outlined"
+                               Required="true" RequiredError="Elige la exención aplicada">
+                        @foreach (var taxExemption in TaxExemption.All)
+                        {
+                            <MudSelectItem Value="taxExemption">@taxExemption.Value - @taxExemption.Description</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
             </MudStack>
         </MudForm>
     </DialogContent>
@@ -75,8 +102,13 @@
     private MudForm form = default!;
 
     private bool IsNew => product.Id == 0;
+    private bool hasTaxExemption { get; set; }
 
-    protected override void OnInitialized() => product = Product;
+    protected override void OnInitialized()
+    {
+        product = Product;
+        hasTaxExemption = Product.TaxExemption is not null;
+    }
 
     private readonly Dictionary<ProductCategory, Product> drafts = [];
 
@@ -88,7 +120,28 @@
         var next = drafts.GetValueOrDefault(category) ?? Product.New(category);
         next.Name = product.Name;
         next.SalePrice = product.SalePrice;
+        next.TaxRate = product.TaxRate;
+        next.TaxExemption = product.TaxExemption;
         product = next;
+    }
+
+    private void ChangeTaxRate(TaxRate taxRate)
+    {
+        product.TaxRate = taxRate;
+        product.TaxExemption = null;
+    }
+    
+    private void ChangeTaxExemption(TaxExemption taxExemption)
+    {
+        product.TaxExemption = taxExemption;
+        product.TaxRate = null;
+    }
+
+    private void ChangeHasTaxExemption(bool value)
+    {
+        hasTaxExemption = value;
+        product.TaxRate = null;
+        product.TaxExemption = null;
     }
 
     private async Task Save()

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Construida a partir de RespuestaSuministro.xsd: envío con dos altas correctas. -->
+<env:Envelope xmlns:env="http://schemas.xmlsoap.org/soap/envelope/">
+  <env:Header/>
+  <env:Body Id="Body">
+    <tikR:RespuestaRegFactuSistemaFacturacion xmlns:tikR="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/RespuestaSuministro.xsd" xmlns:tik="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroInformacion.xsd">
+      <tikR:CSV>A-YDSW8NLFLANWPM</tikR:CSV>
+      <tikR:DatosPresentacion>
+        <tik:NIFPresentador>89890001K</tik:NIFPresentador>
+        <tik:TimestampPresentacion>2027-01-15T11:20:31+01:00</tik:TimestampPresentacion>
+      </tikR:DatosPresentacion>
+      <tikR:Cabecera>
+        <tik:ObligadoEmision>
+          <tik:NombreRazon>MUSEO DE PRUEBA</tik:NombreRazon>
+          <tik:NIF>89890001K</tik:NIF>
+        </tik:ObligadoEmision>
+      </tikR:Cabecera>
+      <tikR:TiempoEsperaEnvio>60</tikR:TiempoEsperaEnvio>
+      <tikR:EstadoEnvio>Correcto</tikR:EstadoEnvio>
+      <tikR:RespuestaLinea>
+        <tikR:IDFactura>
+          <tik:IDEmisorFactura>89890001K</tik:IDEmisorFactura>
+          <tik:NumSerieFactura>T2027-000001</tik:NumSerieFactura>
+          <tik:FechaExpedicionFactura>15-01-2027</tik:FechaExpedicionFactura>
+        </tikR:IDFactura>
+        <tikR:Operacion>
+          <tik:TipoOperacion>Alta</tik:TipoOperacion>
+        </tikR:Operacion>
+        <tikR:RefExterna>venta-1</tikR:RefExterna>
+        <tikR:EstadoRegistro>Correcto</tikR:EstadoRegistro>
+      </tikR:RespuestaLinea>
+      <tikR:RespuestaLinea>
+        <tikR:IDFactura>
+          <tik:IDEmisorFactura>89890001K</tik:IDEmisorFactura>
+          <tik:NumSerieFactura>T2027-000002</tik:NumSerieFactura>
+          <tik:FechaExpedicionFactura>15-01-2027</tik:FechaExpedicionFactura>
+        </tikR:IDFactura>
+        <tikR:Operacion>
+          <tik:TipoOperacion>Alta</tik:TipoOperacion>
+        </tikR:Operacion>
+        <tikR:EstadoRegistro>Correcto</tikR:EstadoRegistro>
+      </tikR:RespuestaLinea>
+    </tikR:RespuestaRegFactuSistemaFacturacion>
+  </env:Body>
+</env:Envelope>
