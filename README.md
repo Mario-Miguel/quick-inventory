@@ -1,8 +1,8 @@
-# Museo de la Sidra — Gestión
+# Quickinventory — Gestión
 
-Aplicación de escritorio para Windows que lleva el inventario, las ventas, los ingresos y los pagos del museo.
+Aplicación de escritorio para Windows que lleva el inventario, las ventas, los ingresos y los pagos.
 
-Está hecha con **C# / .NET 10**, **Blazor Hybrid** dentro de una ventana **WPF**, **MudBlazor** para los componentes visuales y **PostgreSQL** con **Entity Framework Core** para los datos. Todos los equipos del museo comparten la misma base de datos, alojada en la nube.
+Está hecha con **C# / .NET 10**, **Blazor Hybrid** dentro de una ventana **WPF**, **MudBlazor** para los componentes visuales y **PostgreSQL** con **Entity Framework Core** para los datos. Todos los equipos comparten la misma base de datos, alojada en la nube.
 
 ## Qué hay hecho
 
@@ -31,10 +31,12 @@ Está hecha con **C# / .NET 10**, **Blazor Hybrid** dentro de una ventana **WPF*
 - **PostgreSQL** para desarrollo. Lo más cómodo es Docker:
 
   ```powershell
-  docker run -d --name museo-postgres -p 5432:5432 -e POSTGRES_PASSWORD=postgres -v museo-pgdata:/var/lib/postgresql/data postgres:17
+  $env:POSTGRES_PASSWORD = '<elige una contraseña>'
+  docker run -d --name quickinventory -p 5432:5432 -e POSTGRES_PASSWORD -v quickinventory-pgdata:/var/lib/postgresql/data postgres:17
   ```
 
-  Usa un volumen propio para cada proyecto: si el volumen ya tiene datos, postgres ignora `POSTGRES_USER`,
+  `-e POSTGRES_PASSWORD` sin valor pasa al contenedor la variable de entorno del mismo nombre, así la contraseña
+  no queda escrita en el README ni en el comando de Docker. Usa un volumen propio para cada proyecto: si el volumen ya tiene datos, postgres ignora `POSTGRES_USER`,
   `POSTGRES_PASSWORD` y `POSTGRES_DB`. Después crea `%LOCALAPPDATA%\QuickInventory\appsettings.json` con la
   conexión a ese contenedor (ver [Conexión](#conexión)).
 
@@ -72,7 +74,7 @@ src/
 tests/
 ├── QuickInventory.Core.Tests       Tests (xUnit) de las reglas de Core.
 └── QuickInventory.Verifactu.Tests  Tests de la librería VERI*FACTU.
-deploy/postgres/             Scripts para preparar la base de datos del museo.
+deploy/postgres/             Scripts para preparar la base de datos.
 ```
 
 Las dependencias van siempre hacia dentro: `Desktop → UI → Core` y `Desktop → Data → Core`.
@@ -82,7 +84,7 @@ Las dependencias van siempre hacia dentro: `Desktop → UI → Core` y `Desktop 
 
 ### Conexión
 
-La app lee la cadena de conexión `ConnectionStrings:Museo` de estos sitios, y cada uno sustituye al anterior:
+La app lee la cadena de conexión `ConnectionStrings:Quickinventory` de estos sitios, y cada uno sustituye al anterior:
 
 1. `appsettings.json` junto al `.exe` (opcional).
 2. `%LOCALAPPDATA%\QuickInventory\appsettings.json`: la conexión de cada equipo. Es el sitio habitual, también para desarrollar:
@@ -90,12 +92,12 @@ La app lee la cadena de conexión `ConnectionStrings:Museo` de estos sitios, y c
    ```json
    {
      "ConnectionStrings": {
-       "Museo": "Host=servidor.ejemplo.com;Port=5432;Database=museo;Username=museo_app;Password=...;SSL Mode=VerifyFull;Timeout=5"
+       "Quickinventory": "Host=servidor.ejemplo.com;Port=5432;Database=quickinventory;Username=quickinventory_app;Password=...;SSL Mode=VerifyFull;Timeout=5"
      }
    }
    ```
 
-3. La variable de entorno `QUICKINVENTORY_ConnectionStrings__Museo`. También la usa `dotnet ef`.
+3. La variable de entorno `QUICKINVENTORY_ConnectionStrings__Quickinventory`. También la usa `dotnet ef`.
 
 Ninguno de estos archivos está en el repositorio, porque llevan la contraseña: cada uno crea el suyo
 (`src/QuickInventory.Desktop/appsettings.json` está en `.gitignore`). Sin ninguno, la app avisa al arrancar de que
@@ -113,7 +115,7 @@ dotnet tool restore   # una vez: instala dotnet-ef (herramienta local, ver dotne
 # Después de cambiar un modelo:
 dotnet ef migrations add <Nombre> --project src/QuickInventory.Data --startup-project src/QuickInventory.Data --output-dir Migrations
 
-# Aplicarlas a la base de la variable de entorno QUICKINVENTORY_ConnectionStrings__Museo:
+# Aplicarlas a la base de la variable de entorno QUICKINVENTORY_ConnectionStrings__Quickinventory:
 dotnet ef database update --project src/QuickInventory.Data --startup-project src/QuickInventory.Data
 ```
 
@@ -123,10 +125,10 @@ saber si la migración ya está aplicada).
 
 #### Aplicar una migración paso a paso
 
-1. Definir la variable con un usuario **propietario** de la base (no `museo_app`, que no puede cambiar el esquema):
+1. Definir la variable con un usuario **propietario** de la base (no `Quickinventory_app`, que no puede cambiar el esquema):
 
    ```bash
-   export QUICKINVENTORY_ConnectionStrings__Museo='Host=...;Port=5432;Database=museo;Username=<propietario>;Password=...'
+   export QUICKINVENTORY_ConnectionStrings__Quickinventory='Host=...;Port=5432;Database=Quickinventory;Username=<propietario>;Password=...'
    ```
 
 2. Ver cuáles faltan. Las pendientes salen marcadas con `(Pending)`:
@@ -136,22 +138,22 @@ saber si la migración ya está aplicada).
    ```
 
 3. Aplicarlas con `dotnet ef database update …` (arriba). Para revisar antes el SQL que se ejecutará, sobre todo
-   en la base del museo: `dotnet ef migrations script <ÚltimaAplicada> --idempotent --project src/QuickInventory.Data --startup-project src/QuickInventory.Data`.
+   en la base del Quickinventory: `dotnet ef migrations script <ÚltimaAplicada> --idempotent --project src/QuickInventory.Data --startup-project src/QuickInventory.Data`.
 4. Volver a ejecutar `migrations list` y comprobar que no queda ninguna `(Pending)`.
 
-Las tablas nuevas no necesitan permisos aparte: `deploy/postgres/usuario-app.sql` ya da a `museo_app` acceso a las
+Las tablas nuevas no necesitan permisos aparte: `deploy/postgres/usuario-app.sql` ya da a `Quickinventory_app` acceso a las
 que cree el propietario en el futuro.
 
 Para deshacer la última migración **antes de subirla a git** (si ya está aplicada en otra base, no se toca: se
 corrige con una migración nueva): `dotnet ef database update <Anterior> …` y después `dotnet ef migrations remove …`.
 
 - En **Debug** la app aplica sola las migraciones pendientes al arrancar.
-- En **Release** no toca el esquema: solo comprueba que la base y la app van por la misma migración y, si no, avisa y se cierra. En el museo las migraciones se aplican con `dotnet ef database update`, con el usuario **propietario** de la base, al publicar cada versión.
+- En **Release** no toca el esquema: solo comprueba que la base y la app van por la misma migración y, si no, avisa y se cierra. En Quickinventory las migraciones se aplican con `dotnet ef database update`, con el usuario **propietario** de la base, al publicar cada versión.
 - Los equipos se conectan con un usuario sin permisos para cambiar el esquema. Se crea con `deploy/postgres/usuario-app.sql`.
 
 ### Almacenamiento
 
-Los importes se guardan en **céntimos enteros** para evitar errores de redondeo. Lo hace un conversor en `DbContext` y es transparente para el resto del código, que trabaja con `decimal`. Las fechas son la hora local del museo, sin huso horario. Más detalles en `docs/base-de-datos.md`.
+Los importes se guardan en **céntimos enteros** para evitar errores de redondeo. Lo hace un conversor en `DbContext` y es transparente para el resto del código, que trabaja con `decimal`. Las fechas son la hora local de Quickinventory, sin huso horario. Más detalles en `docs/base-de-datos.md`.
 
 ## Siguientes pasos sugeridos
 
