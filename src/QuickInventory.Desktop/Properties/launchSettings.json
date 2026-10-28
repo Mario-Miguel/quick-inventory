@@ -1,0 +1,16 @@
+{
+  "profiles": {
+    "museo-sidra": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "QUICKINVENTORY_CLIENT": "museo-sidra"
+      }
+    },
+    "ejemplo": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "QUICKINVENTORY_CLIENT": "ejemplo"
+      }
+    }
+  }
+}

@@ -1,0 +1,150 @@
+# Publica una versión nueva para UN client (ver docs/publicacion.md):
+#   git tag museo-sidra/v1.2.0 && git push origin museo-sidra/v1.2.0
+# o a mano desde la pestaña Actions ("Run workflow").
+#
+# 1. Pasa los tests (ci.yml).
+# 2. Compila el .exe del client y lo empaqueta con Velopack (instalador + actualización).
+# 3. Aplica las migraciones a la base del client y sube la versión a su release de GitHub,
+#    de donde la descargan sus equipos al pulsar «Actualizar».
+#
+# Configuración necesaria en GitHub:
+# - Los instaladores van a las releases de este mismo repo, que tiene que ser público (los equipos los
+#   descargan sin iniciar sesión). Se suben con el GITHUB_TOKEN del workflow: no hace falta otro token.
+# - Un environment por client, con el mismo nombre que su carpeta de clients/, con el secreto
+#   DB_CONNECTION: cadena de conexión del usuario propietario de su base (puede cambiar el esquema).
+name: Publish new version
+
+on:
+  push:
+    tags: ["*/v*"]
+  workflow_dispatch:
+    inputs:
+      client:
+        description: "client (nombre de su carpeta en clients/)"
+        required: true
+      version:
+        description: "Version of the build"
+        required: true
+
+jobs:
+  data:
+    runs-on: ubuntu-latest
+    outputs:
+      client: ${{ steps.data.outputs.client }}
+      version: ${{ steps.data.outputs.version }}
+      update-url: ${{ steps.data.outputs.update-url }}
+      release-tag: ${{ steps.data.outputs.release-tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: data
+        env:
+          REF: ${{ github.ref_name }}
+          IN_CLIENT: ${{ inputs.client }}
+          IN_VERSION: ${{ inputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            client="$IN_CLIENT"; version="$IN_VERSION"
+          else
+            # Tag "<client>/v<version>"
+            client="${REF%%/v*}"; version="${REF#*/v}"
+          fi
+          [[ "$client" =~ ^[a-z0-9-]+$ ]] || { echo "::error::No valid client: '$client'"; exit 1; }
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::No valid version: '$version' (must be 1.2.0)"; exit 1; }
+          [ -f "clients/$client/client.json" ] || { echo "::error::No existe clients/$client/client.json"; exit 1; }
+          echo "client=$client" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # A fixed release per client with all its versions. Its tag can't be just "<client>": git doesn't
+          # allow a tag "museo-sidra" next to "museo-sidra/v1.2.0" (one would be a file and a folder at once).
+          echo "release-tag=updates-$client" >> "$GITHUB_OUTPUT"
+          echo "update-url=https://github.com/$REPO/releases/download/updates-$client" >> "$GITHUB_OUTPUT"
+
+  tests:
+    uses: ./.github/workflows/ci.yml
+
+  package:
+    needs: [data, tests]
+    runs-on: windows-latest
+    env:
+      CLIENT: ${{ needs.data.outputs.client }}
+      VERSION: ${{ needs.data.outputs.version }}
+      UPDATE_URL: ${{ needs.data.outputs.update-url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet tool restore
+
+      - name: Compile
+        run: dotnet publish src/QuickInventory.Desktop -c Release -r win-x64 --self-contained -p:Client=$env:CLIENT -p:Version=$env:VERSION -p:UpdateUrl=$env:UPDATE_URL -o publish
+
+      - name: Check there is no password
+        run: if (Test-Path publish/appsettings.json) { throw "publish/appsettings.json can't be in the package" }
+
+      - name: Download previous version
+        # Velopack la usa para generar la actualización "delta" (solo lo que cambia).
+        run: dotnet vpk download http --url $env:UPDATE_URL --channel win --allowEmptyChannel -o releases
+
+      - name: Packaging
+        run: |
+          $title = (Get-Content "clients/$env:CLIENT/client.json" -Raw | ConvertFrom-Json).AppName
+          dotnet vpk pack --packId "QuickInventory-$env:CLIENT" --packVersion $env:VERSION --packDir publish `
+            --mainExe QuickInventory.exe --packTitle "$title" --channel win -o releases
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: releases
+          path: releases
+
+  deployment:
+    needs: [data, package]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.data.outputs.client }}
+    concurrency: desplegar-${{ needs.data.outputs.client }}
+    # Para crear la release y subirle archivos con el GITHUB_TOKEN.
+    permissions:
+      contents: write
+    env:
+      CLIENT: ${{ needs.data.outputs.client }}
+      VERSION: ${{ needs.data.outputs.version }}
+      TAG: ${{ needs.data.outputs.release-tag }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet tool restore
+      - uses: actions/download-artifact@v4
+        with:
+          name: releases
+          path: releases
+
+      - name: Apply migrations
+        env:
+          QUICKINVENTORY_ConnectionStrings__Museo: ${{ secrets.DB_CONNECTION }}
+        run: |
+          [ -n "$QUICKINVENTORY_ConnectionStrings__Museo" ] || { echo "::error::Missing secret DB_CONNECTION in the environment'$CLIENT'"; exit 1; }
+          dotnet ef migrations bundle --project src/QuickInventory.Data --startup-project src/QuickInventory.Data -o efbundle --force
+          ./efbundle
+
+      - name: Upload client's release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # --latest=false: que la portada del repo no la muestre como "la última versión" del código.
+          gh release view "$TAG" -R "$REPO" > /dev/null 2>&1 ||
+            gh release create "$TAG" -R "$REPO" --latest=false \
+              --title "Updates $CLIENT" --notes "Installer and updater of $CLIENT."
+          # Previous version package is already downloaded.
+          files=()
+          for f in releases/*; do
+            case "$f" in
+              *-full.nupkg) [[ "$f" == *"-$VERSION-full.nupkg" ]] || continue ;;
+            esac
+            files+=("$f")
+          done
+          gh release upload "$TAG" -R "$REPO" --clobber "${files[@]}"
+          echo "### $CLIENT $VERSION published" >> "$GITHUB_STEP_SUMMARY"
+          echo "Installer: https://github.com/$REPO/releases/download/$TAG/QuickInventory-$CLIENT-win-Setup.exe" >> "$GITHUB_STEP_SUMMARY"

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
 using QuickInventory.Core;
+using QuickInventory.Core.Models;
 using QuickInventory.Data;
 using QuickInventory.UI;
 
@@ -13,6 +14,9 @@ namespace QuickInventory.Desktop;
 
 public partial class App : Application
 {
+    /// <summary>Personalización del cliente para el que se ha compilado (ver ClientSettingsLoader).</summary>
+    public static ClientSettings Client { get; private set; } = new();
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -26,19 +30,22 @@ public partial class App : Application
 
         DispatcherUnhandledException += UnhandledErrorHappens;
 
+        var updater = new VelopackUpdater();
         IServiceProvider services;
         try
         {
-            services = ConfigureServices(LoadConfiguration());
+            Client = ClientSettingsLoader.Load();
+            services = ConfigureServices(LoadConfiguration(), Client, updater);
             DataConfiguration.InitDatabase(services);
         }
         catch (Exception ex)
         {
             // Los errores previstos (sin conexión, contraseña...) ya traen un mensaje para el usuario.
             var reason = ex is BusinessRuleException ? ex.Message : $"No se ha podido abrir la base de datos.\n\n{ex.Message}";
+            if (OfferUpdate(updater, reason)) return;
             MessageBox.Show(
                 $"{reason}\n\nSi el problema sigue, revisa la conexión configurada en:\n{UserSettingsPath}",
-                "Museo de la Sidra",
+                Client.AppName,
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(1);
@@ -70,7 +77,39 @@ public partial class App : Application
         "QuickInventory",
         "appsettings.json");
 
-    private static IServiceProvider ConfigureServices(IConfiguration configuration)
+    /// <summary>
+    /// Si la app no puede arrancar, puede que la versión nueva lo arregle; sobre todo cuando otro equipo
+    /// ya se actualizó y la base es de una versión más nueva. Se ofrece aquí porque sin arrancar no se
+    /// llega al botón de la barra superior. Devuelve true si la app se está actualizando (ya se cierra sola).
+    /// </summary>
+    private static bool OfferUpdate(IAppUpdater updater, string reason)
+    {
+        if (!updater.IsAvailable) return false;
+        try
+        {
+            // Task.Run: esperar directamente en el hilo de la ventana podría bloquearlo para siempre.
+            var check = Task.Run(updater.CheckAsync);
+            if (!check.Wait(TimeSpan.FromSeconds(15)) || check.Result is not { } version) return false;
+
+            var answer = MessageBox.Show(
+                $"{reason}\n\nHay una versión nueva de la aplicación ({version}) que puede solucionarlo. " +
+                "¿Actualizar ahora? Tardará un poco y la aplicación se volverá a abrir sola.",
+                Client.AppName,
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+            if (answer != MessageBoxResult.Yes) return false;
+
+            Task.Run(() => updater.UpdateAndRestartAsync()).Wait();
+            return true;
+        }
+        catch (Exception)
+        {
+            // Sin internet o sin poder descargar: se avisa del error original como siempre.
+            return false;
+        }
+    }
+
+    private static IServiceProvider ConfigureServices(IConfiguration configuration, ClientSettings client, IAppUpdater updater)
     {
         var connectionString = configuration.GetConnectionString("Museo");
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -85,6 +124,8 @@ public partial class App : Application
 #endif
 
         services.AddMudServices();
+        services.AddSingleton(client);
+        services.AddSingleton(updater);
         services.AddData(connectionString);
 
         // Perfil activo (Taquilla / Tienda): uno por ventana.
@@ -102,7 +143,7 @@ public partial class App : Application
     {
         MessageBox.Show(
             $"Ha ocurrido un error inesperado.\n\n{e.Exception.Message}",
-            "Museo de la Sidra",
+            Client.AppName,
             MessageBoxButton.OK,
             MessageBoxImage.Warning);
         e.Handled = true;

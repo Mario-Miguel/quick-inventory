@@ -4,8 +4,12 @@
 @inject ActiveProfile Profile
 @inject IConnectionStatus Connection
 @inject IIssuerService IssuerService
+@inject ClientSettings Client
+@inject IAppUpdater Updater
+@inject IDialogService Dialogs
+@inject ISnackbar Warnings
 
-<MudThemeProvider Theme="Theme.Museo" />
+<MudThemeProvider Theme="theme" />
 <MudPopoverProvider />
 <MudDialogProvider CloseButton="true" BackdropClick="false" />
 <MudSnackbarProvider />
@@ -20,8 +24,20 @@
                            Href="/"
                            aria-label="Volver al inicio" />
         }
-        <MudText Typo="Typo.h6" Class="ml-2">Museo de la Sidra</MudText>
+        <MudText Typo="Typo.h6" Class="ml-2">@Client.AppName</MudText>
         <MudSpacer />
+        @if (newVersion is not null)
+        {
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Warning"
+                       Size="Size.Large"
+                       StartIcon="@Icons.Material.Filled.SystemUpdateAlt"
+                       Disabled="updating"
+                       OnClick="Update"
+                       Class="mr-4">
+                @(updating ? $"Actualizando… {downloaded} %" : $"Actualizar a la versión {newVersion}")
+            </MudButton>
+        }
         @* Cambio de perfil: sin contraseña, basta con elegir el otro. *@
         <MudMenu Disabled="@(setup != SetupState.Done)" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="mr-4">
             <ActivatorContent>
@@ -88,15 +104,77 @@
 
     private SetupState setup;
     private bool retrying;
+    private MudTheme theme = null!;
+    private string? newVersion;
+    private bool updating;
+    private int downloaded;
+    private readonly CancellationTokenSource stop = new();
+
+    /// <summary>Cada cuánto se mira si hay versión nueva (los equipos suelen quedarse abiertos todo el día).</summary>
+    private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromHours(2);
 
     private bool InHomepage => Navigation.ToBaseRelativePath(Navigation.Uri).Trim('/').Length == 0;
 
     protected override async Task OnInitializedAsync()
     {
+        theme = Theme.For(Client.Colors);
         Navigation.LocationChanged += OnNavigation;
         Profile.Changed += OnProfileChanged;
         Connection.Changed += OnConnectionChanged;
         await CheckSetup();
+        _ = CheckUpdatesAsync();
+    }
+
+    private async Task CheckUpdatesAsync()
+    {
+        if (!Updater.IsAvailable) return;
+        using var timer = new PeriodicTimer(UpdateCheckInterval);
+        try
+        {
+            do
+            {
+                try
+                {
+                    newVersion = await Updater.CheckAsync();
+                    await InvokeAsync(StateHasChanged);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Sin internet o sin servidor de actualizaciones: se vuelve a mirar en la próxima vuelta.
+                }
+            }
+            while (await timer.WaitForNextTickAsync(stop.Token));
+        }
+        catch (OperationCanceledException)
+        {
+            // Se ha cerrado la ventana.
+        }
+    }
+
+    private async Task Update()
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Actualizar la aplicación",
+            $"Se instalará la versión {newVersion}. La aplicación se cerrará y se volverá a abrir sola en unos minutos. " +
+            "Si estás cobrando, termina antes la venta.",
+            yesText: "Actualizar",
+            cancelText: "Ahora no");
+        if (confirmed != true) return;
+
+        updating = true;
+        try
+        {
+            await Updater.UpdateAndRestartAsync(p => InvokeAsync(() =>
+            {
+                downloaded = p;
+                StateHasChanged();
+            }));
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido descargar la actualización. Inténtalo más tarde.", Severity.Error);
+            updating = false;
+        }
     }
 
     /// <summary>Sin datos del titular hay que pasar antes por el asistente de la primera instalación.</summary>
@@ -137,7 +215,7 @@
     // Si el nuevo perfil no puede estar en la pantalla actual, se vuelve al inicio.
     private void OnProfileChanged() => InvokeAsync(() =>
     {
-        if (!Modules.Allows(Profile.Current, Navigation.ToBaseRelativePath(Navigation.Uri)))
+        if (!Modules.Allows(Profile.Current, Client.Features, Navigation.ToBaseRelativePath(Navigation.Uri)))
             Navigation.NavigateTo("/");
         StateHasChanged();
     });
@@ -147,5 +225,6 @@
         Navigation.LocationChanged -= OnNavigation;
         Profile.Changed -= OnProfileChanged;
         Connection.Changed -= OnConnectionChanged;
+        stop.Cancel();
     }
 }

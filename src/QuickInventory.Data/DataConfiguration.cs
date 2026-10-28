@@ -47,7 +47,11 @@ public static class DataConfiguration
         try
         {
 #if DEBUG
-            db.Database.Migrate();
+            // Solo si hace falta: Migrate() siempre lanza CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory",
+            // que PostgreSQL rechaza sin permiso CREATE en el esquema aunque la tabla exista. Así también se
+            // puede depurar con el usuario de la app (museo_app), que no tiene ese permiso.
+            if (db.Database.GetPendingMigrations().Any())
+                db.Database.Migrate();
             SeedExamples(db);
 #else
             CheckVersion(db);

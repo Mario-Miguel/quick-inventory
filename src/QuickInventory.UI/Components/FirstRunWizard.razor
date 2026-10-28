@@ -1,6 +1,7 @@
 @* Asistente de la primera instalación: se muestra en lugar de la aplicación hasta que hay datos del titular. *@
 @inject IIssuerService IssuerService
 @inject ISnackbar Warnings
+@inject ClientSettings Client
 
 <MudPaper Class="pa-8 mx-auto first-run" Outlined="true">
     <MudText Typo="Typo.body1" Class="mud-text-secondary mb-2">Paso @(step + 1) de @Steps</MudText>
@@ -67,10 +68,16 @@
 
     private const int Steps = 3;
 
-    private readonly Issuer issuer = new();
+    // Si el cliente.json trae los datos fiscales, el formulario sale ya relleno.
+    private Issuer issuer = new();
     private IssuerForm? issuerForm;
     private int step;
     private bool saving;
+
+    protected override void OnInitialized()
+    {
+        if (Client.Issuer is not null) issuer = Client.Issuer.Clone();
+    }
 
     private async Task Next()
     {
