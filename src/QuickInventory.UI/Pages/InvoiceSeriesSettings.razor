@@ -1,0 +1,122 @@
+@page "/invoice-series"
+@inject IInvoiceSeriesService InvoiceSeriesService
+@inject IDialogService Dialogs
+@inject ISnackbar Warnings
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    <h1 class="page-title mb-0">Series de facturas</h1>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="NewSeries">
+        Nueva serie
+    </MudButton>
+</div>
+
+<MudText Class="mb-4">
+    Cada ticket lleva un número que no se puede repetir ni saltar. Hace falta una serie por año, que comparten
+    Taquilla y Tienda. Una serie solo se puede cambiar mientras no se haya emitido ningún ticket con ella.
+</MudText>
+
+@if (series is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    @if (MissingThisYear)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
+            Falta la serie de @DateTime.Now.Year. Sin ella, ni Taquilla ni Tienda pueden cobrar.
+        </MudAlert>
+    }
+
+    <MudTable T="InvoiceSeriesStatus" Items="series" Hover="true" Striped="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Año</MudTh>
+            <MudTh>Código</MudTh>
+            <MudTh Style="text-align:right">Último número</MudTh>
+            <MudTh>Próximo ticket</MudTh>
+            <MudTh Style="text-align:right">Acciones</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Año">@context.Series.Year</MudTd>
+            <MudTd DataLabel="Código"><span class="product-name">@context.Series.Code</span></MudTd>
+            <MudTd DataLabel="Último número" Style="text-align:right">@context.Series.LastNumber</MudTd>
+            <MudTd DataLabel="Próximo ticket">@context.Series.NextInvoiceId</MudTd>
+            <MudTd Style="text-align:right; white-space:nowrap">
+                @if (context.InUse)
+                {
+                    <MudTooltip Text="Ya tiene tickets emitidos: no se puede cambiar">
+                        <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Default" Class="mx-3" />
+                    </MudTooltip>
+                }
+                else
+                {
+                    <MudTooltip Text="Editar">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" OnClick="() => Edit(context.Series)" aria-label="Editar" />
+                    </MudTooltip>
+                }
+            </MudTd>
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <MudText Class="pa-4">Todavía no hay ninguna serie.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    private List<InvoiceSeriesStatus>? series;
+
+    private static readonly DialogOptions CustomDialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+    };
+
+    private bool MissingThisYear => series?.Any(s => s.Series.Year == DateTime.Now.Year) == false;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load() => series = await InvoiceSeriesService.GetSeriesAsync();
+
+    // Propone la de este año si falta; si no, la del siguiente.
+    private Task NewSeries()
+    {
+        var year = MissingThisYear ? DateTime.Now.Year : DateTime.Now.Year + 1;
+        var newSeries = new InvoiceSeries
+        {
+            Year = year,
+            Code = InvoiceSeries.SuggestedCode(year),
+        };
+        return OpenEditor(newSeries, "Nueva serie");
+    }
+
+    // Se edita una copia: si el usuario cancela, la tabla no cambia.
+    private Task Edit(InvoiceSeries s) => OpenEditor(s.Clone(), "Editar serie");
+
+    private async Task OpenEditor(InvoiceSeries editing, string title)
+    {
+        var parameters = new DialogParameters<InvoiceSeriesDialog> { { x => x.Series, editing } };
+        var dialog = await Dialogs.ShowAsync<InvoiceSeriesDialog>(title, parameters, CustomDialogOptions);
+        var result = await dialog.Result;
+        if (result is not { Canceled: false, Data: InvoiceSeries saved }) return;
+
+        try
+        {
+            await InvoiceSeriesService.SaveSeriesAsync(saved);
+            Warnings.Add($"Serie {saved.Code} guardada.", Severity.Success);
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el cambio. Inténtalo de nuevo.", Severity.Error);
+        }
+
+        await Load();
+    }
+}

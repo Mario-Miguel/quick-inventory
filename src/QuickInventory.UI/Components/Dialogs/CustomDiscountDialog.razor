@@ -40,7 +40,7 @@
 @code {
     [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
 
-    [Parameter] public Product Product { get; set; } = new();
+    [Parameter, EditorRequired] public Product Product { get; set; } = default!;
 
     private decimal amount;
 

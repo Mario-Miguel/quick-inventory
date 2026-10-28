@@ -1,8 +1,8 @@
-# Museo de la Sidra — Gestión
+# Quickinventory — Gestión
 
-Aplicación de escritorio para Windows que lleva el inventario, las ventas, los ingresos y los pagos del museo.
+Aplicación de escritorio para Windows que lleva el inventario, las ventas, los ingresos y los pagos.
 
-Está hecha con **C# / .NET 10**, **Blazor Hybrid** dentro de una ventana **WPF**, **MudBlazor** para los componentes visuales y **SQLite** con **Entity Framework Core** para los datos.
+Está hecha con **C# / .NET 10**, **Blazor Hybrid** dentro de una ventana **WPF**, **MudBlazor** para los componentes visuales y **PostgreSQL** con **Entity Framework Core** para los datos. Todos los equipos comparten la misma base de datos, alojada en la nube.
 
 ## Qué hay hecho
 
@@ -15,7 +15,10 @@ Está hecha con **C# / .NET 10**, **Blazor Hybrid** dentro de una ventana **WPF*
   - baja de productos sin perder su historial.
 - **Products sin stock** (entradas, visitas guiadas...): se marcan con "Llevar control de unidades" desactivado.
 - **Modelos de Sales, Ingresos y Pagos** ya creados en la base de datos; sus pantallas muestran "en construcción".
-- Products de ejemplo la primera vez que se abre (puedes darlos de baja).
+- **Asistente de primera instalación**: pide los datos del titular (nombre o razón social, NIF y dirección). Luego se cambian desde Admin → «Datos del titular».
+- **Bloqueo sin conexión**: si no se llega a la base de datos, la app se tapa con un aviso y no deja hacer nada hasta que vuelve la conexión.
+- **Librería VERI\*FACTU** (`QuickInventory.Verifactu`): genera los registros de facturación con su huella y su QR, y los envía a la AEAT. Todavía no la usa la app (ver `docs/verifactu.md`).
+- Productos de ejemplo la primera vez que se abre en Debug (puedes darlos de baja).
 
 ## Requisitos para programar
 
@@ -25,6 +28,17 @@ Está hecha con **C# / .NET 10**, **Blazor Hybrid** dentro de una ventana **WPF*
   - _Desarrollo de ASP.NET y web_
 - SDK de **.NET 10** (se instala con Visual Studio).
 - **WebView2 Runtime**: ya viene con Windows 10/11 actualizados.
+- **PostgreSQL** para desarrollo. Lo más cómodo es Docker:
+
+  ```powershell
+  $env:POSTGRES_PASSWORD = '<elige una contraseña>'
+  docker run -d --name quickinventory -p 5432:5432 -e POSTGRES_PASSWORD -v quickinventory-pgdata:/var/lib/postgresql/data postgres:17
+  ```
+
+  `-e POSTGRES_PASSWORD` sin valor pasa al contenedor la variable de entorno del mismo nombre, así la contraseña
+  no queda escrita en el README ni en el comando de Docker. Usa un volumen propio para cada proyecto: si el volumen ya tiene datos, postgres ignora `POSTGRES_USER`,
+  `POSTGRES_PASSWORD` y `POSTGRES_DB`. Después crea `%LOCALAPPDATA%\QuickInventory\appsettings.json` con la
+  conexión a ese contenedor (ver [Conexión](#conexión)).
 
 ## Cómo arrancarlo
 
@@ -53,35 +67,93 @@ Con la app en modo Debug puedes pulsar **F12** dentro de la ventana para abrir l
 QuickInventory.slnx
 src/
 ├── QuickInventory.Core      Modelos y contratos de servicio. Sin dependencias.
-├── QuickInventory.Data      EF Core + SQLite e implementación de los servicios.
+├── QuickInventory.Data      EF Core + PostgreSQL, migraciones e implementación de los servicios.
 ├── QuickInventory.UI        Pantallas Blazor (Razor Class Library).
-└── QuickInventory.Desktop   Ventana WPF que aloja las pantallas.
+├── QuickInventory.Desktop   Ventana WPF que aloja las pantallas.
+└── QuickInventory.Verifactu Librería VERI*FACTU: registros, huella, QR y envío a la AEAT. Sin dependencias.
+tests/
+├── QuickInventory.Core.Tests       Tests (xUnit) de las reglas de Core.
+└── QuickInventory.Verifactu.Tests  Tests de la librería VERI*FACTU.
+deploy/postgres/             Scripts para preparar la base de datos.
 ```
 
 Las dependencias van siempre hacia dentro: `Desktop → UI → Core` y `Desktop → Data → Core`.
 **UI no conoce Data**: las pantallas solo hablan con interfaces como `IInventoryService`. Gracias a eso, la futura web podrá usar las mismas pantallas con otra implementación de los servicios.
 
-## Dónde se guardan los datos
+## Base de datos
 
-En un único archivo: `%LOCALAPPDATA%\QuickInventory\museo.db`
+### Conexión
 
-Para hacer una copia de seguridad basta con copiar ese archivo con la app cerrada. Para empezar de cero, bórralo.
+La app lee la cadena de conexión `ConnectionStrings:Quickinventory` de estos sitios, y cada uno sustituye al anterior:
 
-Los importes se guardan en **céntimos enteros** para evitar errores de redondeo. Lo hace un conversor en `DbContext` y es transparente para el resto del código, que trabaja con `decimal`.
+1. `appsettings.json` junto al `.exe` (opcional).
+2. `%LOCALAPPDATA%\QuickInventory\appsettings.json`: la conexión de cada equipo. Es el sitio habitual, también para desarrollar:
 
-## Antes de instalarlo en el museo: pasar a migraciones
+   ```json
+   {
+     "ConnectionStrings": {
+       "Quickinventory": "Host=servidor.ejemplo.com;Port=5432;Database=quickinventory;Username=quickinventory_app;Password=...;SSL Mode=VerifyFull;Timeout=5"
+     }
+   }
+   ```
 
-Ahora mismo la base de datos se crea con `EnsureCreated()`, que es cómodo para empezar pero **no puede modificar el esquema** de una base que ya existe. Cuando el model esté más estable:
+3. La variable de entorno `QUICKINVENTORY_ConnectionStrings__Quickinventory`. También la usa `dotnet ef`.
 
-```powershell
-dotnet tool install --global dotnet-ef
-dotnet add src/QuickInventory.Data package Microsoft.EntityFrameworkCore.Design
-dotnet ef migrations add Inicial --project src/QuickInventory.Data --startup-project src/QuickInventory.Desktop
+Ninguno de estos archivos está en el repositorio, porque llevan la contraseña: cada uno crea el suyo
+(`src/QuickInventory.Desktop/appsettings.json` está en `.gitignore`). Sin ninguno, la app avisa al arrancar de que
+no hay base de datos configurada.
+
+Si al arrancar no puede conectar, la app avisa con la ruta del archivo de configuración y se cierra. Si la conexión se pierde con la app abierta, se bloquea hasta que vuelve.
+
+### Migraciones
+
+El esquema sale de las migraciones de EF Core (`src/QuickInventory.Data/Migrations`). **La base no se borra nunca**: guardará registros de facturación que hay que conservar años.
+
+```bash
+dotnet tool restore   # una vez: instala dotnet-ef (herramienta local, ver dotnet-tools.json)
+
+# Después de cambiar un modelo:
+dotnet ef migrations add <Nombre> --project src/QuickInventory.Data --startup-project src/QuickInventory.Data --output-dir Migrations
+
+# Aplicarlas a la base de la variable de entorno QUICKINVENTORY_ConnectionStrings__Quickinventory:
+dotnet ef database update --project src/QuickInventory.Data --startup-project src/QuickInventory.Data
 ```
 
-Después, en `DataConfiguration.InitDatabase`, cambia `db.Database.EnsureCreated()` por `db.Database.Migrate()`.
+`dotnet ef` no lee los `appsettings.json`: solo la variable de entorno. Sin ella falla con
+«The ConnectionString property has not been initialized» (también `migrations remove`, que consulta la base para
+saber si la migración ya está aplicada).
 
-Para que `dotnet ef` pueda crear el contexto en tiempo de diseño, añade en `QuickInventory.Data` una clase que implemente `IDesignTimeDbContextFactory<DbContext>`.
+#### Aplicar una migración paso a paso
+
+1. Definir la variable con un usuario **propietario** de la base (no `Quickinventory_app`, que no puede cambiar el esquema):
+
+   ```bash
+   export QUICKINVENTORY_ConnectionStrings__Quickinventory='Host=...;Port=5432;Database=Quickinventory;Username=<propietario>;Password=...'
+   ```
+
+2. Ver cuáles faltan. Las pendientes salen marcadas con `(Pending)`:
+
+   ```bash
+   dotnet ef migrations list --project src/QuickInventory.Data --startup-project src/QuickInventory.Data
+   ```
+
+3. Aplicarlas con `dotnet ef database update …` (arriba). Para revisar antes el SQL que se ejecutará, sobre todo
+   en la base del Quickinventory: `dotnet ef migrations script <ÚltimaAplicada> --idempotent --project src/QuickInventory.Data --startup-project src/QuickInventory.Data`.
+4. Volver a ejecutar `migrations list` y comprobar que no queda ninguna `(Pending)`.
+
+Las tablas nuevas no necesitan permisos aparte: `deploy/postgres/usuario-app.sql` ya da a `Quickinventory_app` acceso a las
+que cree el propietario en el futuro.
+
+Para deshacer la última migración **antes de subirla a git** (si ya está aplicada en otra base, no se toca: se
+corrige con una migración nueva): `dotnet ef database update <Anterior> …` y después `dotnet ef migrations remove …`.
+
+- En **Debug** la app aplica sola las migraciones pendientes al arrancar.
+- En **Release** no toca el esquema: solo comprueba que la base y la app van por la misma migración y, si no, avisa y se cierra. En Quickinventory las migraciones se aplican con `dotnet ef database update`, con el usuario **propietario** de la base, al publicar cada versión.
+- Los equipos se conectan con un usuario sin permisos para cambiar el esquema. Se crea con `deploy/postgres/usuario-app.sql`.
+
+### Almacenamiento
+
+Los importes se guardan en **céntimos enteros** para evitar errores de redondeo. Lo hace un conversor en `DbContext` y es transparente para el resto del código, que trabaja con `decimal`. Las fechas son la hora local de Quickinventory, sin huso horario. Más detalles en `docs/base-de-datos.md`.
 
 ## Siguientes pasos sugeridos
 
@@ -89,13 +161,13 @@ Para que `dotnet ef` pueda crear el contexto en tiempo de diseño, añade en `Qu
 2. **Cierre de caja diario**: totales por método de pago y exportación a PDF/Excel.
 3. **Ingresos y Pagos**: formularios simples sobre `CashMovement`, con categorías.
 4. **Historial de movimientos** de cada product en el inventario.
-5. **Copia de seguridad automática** del archivo `museo.db` al cerrar la app.
+5. **Copias de seguridad** de la base en la nube con retención larga (ver `docs/verifactu.md`).
 6. **Instalador**: `dotnet publish -c Release -r win-x64 --self-contained` e Inno Setup o MSIX.
 
 ## Camino a la versión web
 
 1. Crear un proyecto **Blazor Web App** que referencie `QuickInventory.UI` y use `Main` como componente raíz.
-2. Cambiar el proveedor de EF Core de SQLite a PostgreSQL o SQL Server en `AddData`.
+2. Registrar `AddData` con la cadena de conexión de la configuración del servidor (ya usa PostgreSQL).
 3. Añadir inicio de sesión (ASP.NET Core Identity), que en escritorio no hace falta.
 
 Las pantallas, los modelos y las reglas de negocio se reutilizan sin cambios.

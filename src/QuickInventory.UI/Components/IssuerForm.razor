@@ -1,0 +1,37 @@
+@* Campos con los datos del titular. Lo usan el asistente de la primera instalación y la pantalla de Admin. *@
+<MudForm @ref="form">
+    <MudStack Spacing="3">
+        <MudTextField T="string" @bind-Value="Issuer.LegalName" Label="Nombre o razón social" Required="true"
+                      RequiredError="Escribe el nombre o la razón social del titular"
+                      HelperText="Tal como figura en Hacienda"
+                      MaxLength="120" AutoFocus="true" Variant="Variant.Outlined" />
+
+        <MudTextField T="string" @bind-Value="Issuer.Nif" Label="NIF" Required="true"
+                      RequiredError="Escribe el NIF del titular" Validation="@(new Func<string, string?>(ValidateNif))"
+                      HelperText="Con la letra. Da igual si lo escribes con espacios o guiones" Variant="Variant.Outlined" />
+
+        <MudTextField T="string" @bind-Value="Issuer.Address" Label="Dirección (opcional)"
+                      HelperText="Saldrá en los tickets. Por ejemplo, «Calle Mayor, 1, 33000 Oviedo (Asturias)»"
+                      MaxLength="300" Variant="Variant.Outlined" />
+    </MudStack>
+</MudForm>
+
+@code {
+    [Parameter, EditorRequired] public Issuer Issuer { get; set; } = default!;
+
+    private MudForm form = default!;
+
+    /// <summary>Comprueba los campos y marca los que estén mal.</summary>
+    public async Task<bool> ValidateAsync()
+    {
+        await form.ValidateAsync();
+        return form.IsValid;
+    }
+
+    private static string? ValidateNif(string value)
+    {
+        var nif = TaxId.Normalize(value);
+        if (nif.Length == 0) return null;
+        return TaxId.IsValid(nif) ? null : "El NIF no es correcto. Revisa que no falte ni sobre ningún número o letra";
+    }
+}

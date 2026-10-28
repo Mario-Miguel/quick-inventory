@@ -4,24 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Windows desktop app for the Museo de la Sidra (inventory, sales, income, payments). C# / .NET 10, Blazor Hybrid hosted in a WPF window, MudBlazor components, SQLite via EF Core. Only the Inventario module is implemented; Sales, Ingresos and Pagos have models in the DB but their routes point to `EnConstruccion.razor`.
+Windows desktop app for the Museo de la Sidra (inventory, sales, income, payments). C# / .NET 10, Blazor Hybrid hosted in a WPF window, MudBlazor components, PostgreSQL via EF Core (one database shared by every computer; in the cloud for the museum, a local Docker container in development). VERI\*FACTU integration is planned in `docs/verifactu.md`. Only the Inventario module is implemented; Sales, Ingresos and Pagos have models in the DB but their routes point to `EnConstruccion.razor`.
 
 **Everything is in Spanish**: identifiers (`GetProductsAsync`, `factory`, `Avisos`), comments, UI text and commit-facing docs. Keep new code in Spanish to match. User-facing text is aimed at non-technical museum staff (plain wording, large buttons).
 
 ## Commands
 
-There is no test project yet.
-
 ```bash
-# Linux/WSL (development happens here): compiles everything, including the WPF project
-dotnet build QuickInventory.slnx -p:EnableWindowsTargeting=true
+dotnet build QuickInventory.slnx                 # also on Linux/WSL, including the WPF project
+dotnet run --project src/QuickInventory.Desktop  # Windows only
 
-# Windows only
-dotnet build QuickInventory.slnx
-dotnet run --project src/QuickInventory.Desktop
+# Tests (xUnit, tests/)
+dotnet test tests/QuickInventory.Core.Tests
+dotnet test tests/QuickInventory.Verifactu.Tests   # the real AEAT test is skipped unless VERIFACTU_PRUEBAS_* are set
+
+# Migrations (dotnet-ef is a local tool: run `dotnet tool restore` once).
+# Data is its own startup project (Desktop can't be used from Linux); see DesignTimeDbContextFactory.
+dotnet ef migrations add <Nombre> --project src/QuickInventory.Data --startup-project src/QuickInventory.Data --output-dir Migrations
+dotnet ef database update --project src/QuickInventory.Data --startup-project src/QuickInventory.Data
 ```
 
-`QuickInventory.Desktop` targets `net10.0-windows10.0.17763.0` (WPF + WebView2). The explicit Windows version is required: the WebView2 package's WPF assembly for .NET 5+ references `Microsoft.Windows.SDK.NET`, which is only copied to the output with a versioned Windows TFM (otherwise it fails at runtime with "Could not load file or assembly 'Microsoft.Windows.SDK.NET'"). On Linux a plain `dotnet build` of the solution fails with `NETSDK1100`; the flag above lets it compile, but the app can only be run on Windows.
+`QuickInventory.Desktop` targets `net10.0-windows10.0.17763.0` (WPF + WebView2). The explicit Windows version is required: the WebView2 package's WPF assembly for .NET 5+ references `Microsoft.Windows.SDK.NET`, which is only copied to the output with a versioned Windows TFM (otherwise it fails at runtime with "Could not load file or assembly 'Microsoft.Windows.SDK.NET'"). The csproj sets `EnableWindowsTargeting=true` so the solution compiles on Linux (without it, it fails with `NETSDK1100` and so does VS Code's Testing tab, which builds the whole solution); the app can only be run on Windows.
 
 To run the app from WSL, build a `win-x64` exe onto the Windows drive and launch it through WSL interop (the Windows side has the .NET 10 Desktop runtime; output goes to `C:` because WebView2 misbehaves on `\\wsl.localhost` paths):
 
@@ -39,12 +42,13 @@ Shared build settings (nullable, implicit usings, version) live in `Directory.Bu
 
 ## Architecture
 
-Four projects; dependencies point inward:
+Five projects; dependencies point inward:
 
 - `QuickInventory.Core` — models (`Modelos/`), service interfaces (`Servicios/I*Service.cs`), `BusinessRuleException`. No dependencies.
 - `QuickInventory.Data` — `DbContext`, service implementations (`Servicios/`), and `DataConfiguration` (DI registration via `AddData` + DB init/seed).
+- `QuickInventory.Verifactu` — standalone VERI\*FACTU library (no project references): builds `RegistroAlta`/`RegistroAnulacion` XML with the chained SHA-256 fingerprint, validates against the AEAT XSDs embedded in `Esquemas/`, builds the QR URL, and sends/queries via SOAP (`AeatClient`). It has its own exceptions (`VerifactuException`…); Data will translate them to `BusinessRuleException` (phase 2). All values that go into the fingerprint must be formatted with `VerifactuFormat`. The AEAT source documents are in the git-ignored `.internalDocs/Verifactu/`.
 - `QuickInventory.UI` — Razor Class Library with all screens. Root component is `Main.razor`; theme in `Theme.cs`; layout registers the MudBlazor providers.
-- `QuickInventory.Desktop` — WPF host. `App.xaml.cs` sets `es-ES` culture, builds the `ServiceProvider`, initializes the DB and exposes the provider as the `services` resource that `MainWindow.xaml`'s `BlazorWebView` consumes.
+- `QuickInventory.Desktop` — WPF host. `App.xaml.cs` sets `es-ES` culture, loads the configuration (connection string), builds the `ServiceProvider`, initializes the DB and exposes the provider as the `services` resource that `MainWindow.xaml`'s `BlazorWebView` consumes.
 
 **UI must not reference Data.** Pages inject only Core interfaces (e.g. `IInventoryService`). This is deliberate: a future Blazor Web App will reuse `QuickInventory.UI` unchanged with a different provider (PostgreSQL/SQL Server) swapped in `AddData`. Don't put anything Windows-specific in UI/Core/Data.
 
@@ -65,4 +69,10 @@ Adding a new service: interface in Core → implementation in Data → register 
 
 ## Database
 
-Single file at `%LOCALAPPDATA%\QuickInventory\museo.db`. The schema diagram and storage conventions are in `docs/base-de-datos.md`; update it whenever a model or `BaseDbContext` changes. Schema is currently created with `EnsureCreated()` in `DataConfiguration.InitDatabase`, which also seeds sample products on first run. `EnsureCreated` cannot alter an existing schema: after changing models during development, delete `museo.db` to recreate it. Before deploying to the museum, the plan (see README) is to switch to EF migrations (`dotnet ef migrations add Inicial --project src/QuickInventory.Data --startup-project src/QuickInventory.Desktop`, add an `IDesignTimeDbContextFactory`, and replace `EnsureCreated()` with `Migrate()`).
+PostgreSQL, shared by every computer running the app. The schema diagram and storage conventions are in `docs/base-de-datos.md`; update it whenever a model or `BaseDbContext` changes.
+
+- **Connection string** `ConnectionStrings:Museo`, read in layers by `App.LoadConfiguration`: `appsettings.json` next to the exe (optional, git-ignored: it holds the password) → `%LOCALAPPDATA%\QuickInventory\appsettings.json` (per computer; the usual place, also in development) → env var `QUICKINVENTORY_ConnectionStrings__Museo` (also used by `dotnet ef`).
+- **Schema comes from EF migrations** (`src/QuickInventory.Data/Migrations`). After changing a model, add a migration (command above); never edit an applied one. `DataConfiguration.InitDatabase` applies pending migrations and seeds sample products only in **Debug**; in Release it only checks that the DB and the app are on the same migration and refuses to start otherwise (migrations are applied from development with the schema owner; the app user from `deploy/postgres/usuario-app.sql` can't alter the schema). The database is never dropped or recreated: it will hold invoice records that must be kept for years.
+- **Dates** are local museum time (`DateTime.Now`) stored as `timestamp without time zone` (convention in `ConfigureConventions`). Without it Npgsql would require UTC `DateTime`s.
+- **Connection loss locks the app**: `ConnectionMonitor` (Data, exposed as Core's `IConnectionStatus`) polls the DB and is also notified by `ConnectionFailureInterceptor` when an EF operation fails for connection reasons; `MainLayout` covers everything with an overlay while disconnected. There is no offline mode by design (see `docs/verifactu.md`, 2.1).
+- **First run**: while there is no `Issuer` row, `MainLayout` shows `FirstRunWizard` instead of the page. Admin can edit it later in `/issuer`.

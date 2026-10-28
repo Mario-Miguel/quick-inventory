@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Construida a partir de RespuestaSuministro.xsd: una alta aceptada con errores (huella mal calculada),
+     una anulación rechazada y una alta que la AEAT ya tenía (duplicada). -->
+<env:Envelope xmlns:env="http://schemas.xmlsoap.org/soap/envelope/">
+  <env:Body>
+    <tikR:RespuestaRegFactuSistemaFacturacion xmlns:tikR="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/RespuestaSuministro.xsd" xmlns:tik="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroInformacion.xsd">
+      <tikR:CSV>A-7KZ2Q4N8XW3ERT</tikR:CSV>
+      <tikR:DatosPresentacion>
+        <tik:NIFPresentador>89890001K</tik:NIFPresentador>
+        <tik:TimestampPresentacion>2027-07-01T10:00:05+02:00</tik:TimestampPresentacion>
+      </tikR:DatosPresentacion>
+      <tikR:Cabecera>
+        <tik:ObligadoEmision>
+          <tik:NombreRazon>MUSEO DE PRUEBA</tik:NombreRazon>
+          <tik:NIF>89890001K</tik:NIF>
+        </tik:ObligadoEmision>
+      </tikR:Cabecera>
+      <tikR:TiempoEsperaEnvio>120</tikR:TiempoEsperaEnvio>
+      <tikR:EstadoEnvio>ParcialmenteCorrecto</tikR:EstadoEnvio>
+      <tikR:RespuestaLinea>
+        <tikR:IDFactura>
+          <tik:IDEmisorFactura>89890001K</tik:IDEmisorFactura>
+          <tik:NumSerieFactura>T2027-000010</tik:NumSerieFactura>
+          <tik:FechaExpedicionFactura>01-07-2027</tik:FechaExpedicionFactura>
+        </tikR:IDFactura>
+        <tikR:Operacion>
+          <tik:TipoOperacion>Alta</tik:TipoOperacion>
+        </tikR:Operacion>
+        <tikR:EstadoRegistro>AceptadoConErrores</tikR:EstadoRegistro>
+        <tikR:CodigoErrorRegistro>2000</tikR:CodigoErrorRegistro>
+        <tikR:DescripcionErrorRegistro>El cálculo de la huella suministrada es incorrecta.</tikR:DescripcionErrorRegistro>
+      </tikR:RespuestaLinea>
+      <tikR:RespuestaLinea>
+        <tikR:IDFactura>
+          <tik:IDEmisorFactura>89890001K</tik:IDEmisorFactura>
+          <tik:NumSerieFactura>T2027-000004</tik:NumSerieFactura>
+          <tik:FechaExpedicionFactura>30-06-2027</tik:FechaExpedicionFactura>
+        </tikR:IDFactura>
+        <tikR:Operacion>
+          <tik:TipoOperacion>Anulacion</tik:TipoOperacion>
+        </tikR:Operacion>
+        <tikR:EstadoRegistro>Incorrecto</tikR:EstadoRegistro>
+        <tikR:CodigoErrorRegistro>3002</tikR:CodigoErrorRegistro>
+        <tikR:DescripcionErrorRegistro>No existe el registro de facturación.</tikR:DescripcionErrorRegistro>
+      </tikR:RespuestaLinea>
+      <tikR:RespuestaLinea>
+        <tikR:IDFactura>
+          <tik:IDEmisorFactura>89890001K</tik:IDEmisorFactura>
+          <tik:NumSerieFactura>T2027-000009</tik:NumSerieFactura>
+          <tik:FechaExpedicionFactura>01-07-2027</tik:FechaExpedicionFactura>
+        </tikR:IDFactura>
+        <tikR:Operacion>
+          <tik:TipoOperacion>Alta</tik:TipoOperacion>
+        </tikR:Operacion>
+        <tikR:EstadoRegistro>Incorrecto</tikR:EstadoRegistro>
+        <tikR:CodigoErrorRegistro>3000</tikR:CodigoErrorRegistro>
+        <tikR:DescripcionErrorRegistro>Registro de facturación duplicado.</tikR:DescripcionErrorRegistro>
+        <tikR:RegistroDuplicado>
+          <tik:IdPeticionRegistroDuplicado>20270701095959123456</tik:IdPeticionRegistroDuplicado>
+          <tik:EstadoRegistroDuplicado>Correcta</tik:EstadoRegistroDuplicado>
+        </tikR:RegistroDuplicado>
+      </tikR:RespuestaLinea>
+    </tikR:RespuestaRegFactuSistemaFacturacion>
+  </env:Body>
+</env:Envelope>

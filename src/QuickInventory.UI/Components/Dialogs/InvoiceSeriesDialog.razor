@@ -1,0 +1,59 @@
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudStack Spacing="3">
+                <MudText Class="mud-text-secondary">La serie es la misma para Taquilla y Tienda.</MudText>
+
+                <MudNumericField T="int" Value="series.Year" ValueChanged="ChangeYear" Label="Año"
+                                 Min="2000" Max="@(DateTime.Now.Year + 1)" Variant="Variant.Outlined" />
+
+                <MudTextField T="string" @bind-Value="series.Code" Label="Código de la serie" Required="true"
+                              RequiredError="Escribe el código de la serie" MaxLength="InvoiceSeries.MaxCodeLength"
+                              HelperText="Va delante del número en cada ticket. Solo letras sin tilde, números, «-» y «/»"
+                              Immediate="true" Variant="Variant.Outlined" />
+
+                <MudNumericField T="int" @bind-Value="series.LastNumber" Label="Número del último ticket emitido"
+                                 HelperText="Si este año ya se han hecho tickets con esta serie (por ejemplo, con otro programa), escribe el número del último. Si no, deja 0"
+                                 Min="0" Immediate="true" Variant="Variant.Outlined" />
+
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    El próximo ticket será el <b>@Preview</b>.
+                </MudAlert>
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Size="Size.Large" OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary" OnClick="Save">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public InvoiceSeries Series { get; set; } = default!;
+
+    private InvoiceSeries series = default!;
+    private MudForm form = default!;
+
+    private string Preview => InvoiceSeries.FormatInvoiceId(series.Code.Trim().ToUpperInvariant(), series.LastNumber + 1);
+
+    protected override void OnInitialized() => series = Series;
+
+    // Si el código es el propuesto, cambia con el año; si lo han escrito a mano, se respeta.
+    private void ChangeYear(int year)
+    {
+        var suggested = series.Code == InvoiceSeries.SuggestedCode(series.Year);
+        series.Year = year;
+        if (suggested) series.Code = InvoiceSeries.SuggestedCode(series.Year);
+    }
+
+    private async Task Save()
+    {
+        await form.ValidateAsync();
+        if (!form.IsValid) return;
+        Dialog.Close(DialogResult.Ok(series));
+    }
+
+    private void Cancel() => Dialog.Cancel();
+}

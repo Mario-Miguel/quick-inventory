@@ -1,0 +1,58 @@
+@page "/issuer"
+@inject IIssuerService IssuerService
+@inject ISnackbar Warnings
+
+<h1 class="page-title">Datos del titular</h1>
+
+@if (issuer is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudPaper Class="pa-6" Outlined="true" Style="max-width: 720px">
+        <IssuerForm @ref="issuerForm" Issuer="issuer" />
+        <div class="d-flex justify-end mt-6">
+            <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save" Disabled="saving" OnClick="Save">
+                Guardar
+            </MudButton>
+        </div>
+    </MudPaper>
+}
+
+@code {
+    private Issuer? issuer;
+    private IssuerForm? issuerForm;
+    private bool saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Se edita una copia: si no se guarda, no cambia nada.
+        issuer = (await IssuerService.GetIssuerAsync())?.Clone() ?? new Issuer();
+    }
+
+    private async Task Save()
+    {
+        if (issuer is null || issuerForm is null || !await issuerForm.ValidateAsync()) return;
+
+        saving = true;
+        try
+        {
+            await IssuerService.SaveIssuerAsync(issuer);
+            Warnings.Add("Datos del titular guardados.", Severity.Success);
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el cambio. Inténtalo de nuevo.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}
