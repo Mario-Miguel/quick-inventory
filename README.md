@@ -103,15 +103,13 @@ otros colores, sin módulos opcionales y con los datos fiscales rellenos.
 **Probar otro client al depurar.** En Debug el ejecutable lleva dentro todos los clients, y la variable de
 entorno `QUICKINVENTORY_CLIENT=<id>` elige con cuál arranca (sin ella, el compilado). No hace falta recompilar:
 
-- Visual Studio: elige el perfil (`museo-sidra`, `ejemplo`…) en el desplegable junto al botón ▶
-  (`src/QuickInventory.Desktop/Properties/launchSettings.json`).
-- Terminal: `dotnet run --project src/QuickInventory.Desktop --launch-profile ejemplo`.
 - VS Code: al pulsar F5 pregunta el client (lista `inputs` de `.vscode/launch.json`).
+- Terminal: `QUICKINVENTORY_CLIENT=ejemplo dotnet run --project src/QuickInventory.Desktop`.
 
 En Release la variable no hace nada: solo va dentro el client compilado.
 
-Para un client nuevo: copia `clients/ejemplo` a `clients/<id>` y cambia su `client.json`. Para depurarlo, añade su
-perfil a `launchSettings.json` (y su id a `.vscode/launch.json` si usas VS Code).
+Para un client nuevo: copia `clients/ejemplo` a `clients/<id>` y cambia su `client.json`. Para depurarlo, añade su id
+a la lista de `.vscode/launch.json`.
 
 ## Publicar versiones
 

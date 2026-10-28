@@ -20,7 +20,7 @@ public static class ClientSettingsLoader
 
     /// <summary>
     /// Solo en Debug: id del client (carpeta de clients/) con el que arrancar en lugar del compilado.
-    /// Lo ponen los perfiles de depuración (launchSettings.json, .vscode/launch.json).
+    /// La pone la lista de clientes de .vscode/launch.json al depurar.
     /// </summary>
     public const string ClientVariable = "QUICKINVENTORY_CLIENT";
 

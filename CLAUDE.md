@@ -36,7 +36,7 @@ dotnet build src/QuickInventory.Desktop -r win-x64 --no-self-contained -p:Enable
 
 The `taskkill` is needed because a running instance locks the output files (`MSB3021: Access ... denied`); `&&` avoids launching a stale exe when the build fails.
 
-Per-client executable (see README, "Clients"): `dotnet publish src/QuickInventory.Desktop -c Release -r win-x64 --self-contained -p:Client=<id> -o publish/<id>`. Without `-p:Client` it builds `museo-sidra`. In Debug all clients are embedded and env var `QUICKINVENTORY_CLIENT=<id>` picks one at startup (launch profiles in `Properties/launchSettings.json`; ignored in Release).
+Per-client executable (see README, "Clients"): `dotnet publish src/QuickInventory.Desktop -c Release -r win-x64 --self-contained -p:Client=<id> -o publish/<id>`. Without `-p:Client` it builds `museo-sidra`. In Debug all clients are embedded and env var `QUICKINVENTORY_CLIENT=<id>` picks one at startup (set by the client picker in `.vscode/launch.json`; ignored in Release).
 
 In a Debug build, F12 inside the app window opens the WebView dev tools.
 
