@@ -3,11 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:blazor="clr-namespace:Microsoft.AspNetCore.Components.WebView.Wpf;assembly=Microsoft.AspNetCore.Components.WebView.Wpf"
         xmlns:ui="clr-namespace:QuickInventory.UI;assembly=QuickInventory.UI"
-        Title="Quick Inventory - Management"
         WindowState="Maximized"
         MinWidth="1000"
-        MinHeight="650"
-        Background="#FAF7F2">
+        MinHeight="650">
     <blazor:BlazorWebView HostPage="wwwroot\index.html"
                           Services="{DynamicResource services}">
         <blazor:BlazorWebView.RootComponents>

@@ -1,0 +1,22 @@
+# Compila la solución entera y pasa los tests. También lo usa publish.yml antes de crear una versión.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+jobs:
+  tests:
+    # El proyecto WPF compila en Linux (EnableWindowsTargeting) y los tests no necesitan Windows.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet build QuickInventory.slnx -c Release
+      - run: dotnet test tests/QuickInventory.Core.Tests -c Release --no-build
+      # La prueba real contra la AEAT se omite: no hay variables VERIFACTU_PRUEBAS_*.
+      - run: dotnet test tests/QuickInventory.Verifactu.Tests -c Release --no-build

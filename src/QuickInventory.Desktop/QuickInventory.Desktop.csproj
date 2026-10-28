@@ -10,12 +10,32 @@
     <!-- Deja compilarlo desde Linux/WSL (solo se ejecuta en Windows). Sin esto falla la compilación de la
          solución entera, que es lo que hace la pestaña Testing de VS Code antes de lanzar los tests. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- Main propio (Program.cs) para que Velopack se ejecute antes que nada. -->
+    <StartupObject>QuickInventory.Desktop.Program</StartupObject>
   </PropertyGroup>
+
+  <!-- Dirección de las actualizaciones (la release del client en GitHub). La pone el pipeline al compilar
+       (ver docs/publicacion.md); sin ella la app no busca actualizaciones. -->
+  <ItemGroup Condition="'$(UpdateUrl)' != ''">
+    <AssemblyMetadata Include="UpdateUrl" Value="$(UpdateUrl)" />
+  </ItemGroup>
+
+  <!-- Client para el que se compila: carpeta de clients/ con su client.json (ver README, «Clients»).
+       Se elige con -p:Client=<id>; sin él, el Museo de la Sidra. -->
+  <PropertyGroup>
+    <Client Condition="'$(Client)' == ''">museo-sidra</Client>
+    <ClientDir>$(MSBuildThisFileDirectory)..\..\clients\$(Client)\</ClientDir>
+  </PropertyGroup>
+
+  <Target Name="ComprobarClient" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(ClientDir)client.json')" Text="No existe clients/$(Client)/client.json. Revisa el valor de -p:Client." />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.*" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.*" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.*" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,7 +44,29 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Conexión opcional junto al .exe. No está en el repo (lleva la contraseña): ver App.xaml.cs. -->
+    <!-- Personalización del client, dentro del .exe para que no se pueda tocar (ver ClientSettingsLoader). -->
+    <EmbeddedResource Include="$(ClientDir)client.json" LogicalName="client.json" />
+    <!-- Sin esto, al cambiar de client con un client.json más antiguo que el .exe no se recompilaría. -->
+    <CoreCompileCache Include="$(Client)" />
+  </ItemGroup>
+
+  <!-- En Debug, además, los demás clients: el perfil de depuración elige uno al arrancar
+       (variable QUICKINVENTORY_CLIENT, ver ClientSettingsLoader). El compilado ya va como "client.json"
+       (repetirlo da NETSDK1022) y se reconoce por el metadato "Client". La barra se normaliza porque en
+       Windows RecursiveDir sale con "\". -->
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <AssemblyMetadata Include="Client" Value="$(Client)" />
+    <ClientDebug Include="$(MSBuildThisFileDirectory)..\..\clients\**\client.json" Exclude="$(ClientDir)client.json" />
+    <EmbeddedResource Include="@(ClientDebug)" LogicalName="clients/$([System.String]::Copy('%(RecursiveDir)').Replace('\','/'))client.json" />
+  </ItemGroup>
+
+  <!-- Conexión opcional junto al .exe. No está en el repo (lleva la contraseña): ver App.xaml.cs.
+       La del client (clients/<id>/appsettings.json) tiene preferencia sobre la de esta carpeta. -->
+  <ItemGroup Condition="Exists('$(ClientDir)appsettings.json')">
+    <None Remove="appsettings.json" />
+    <None Include="$(ClientDir)appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="!Exists('$(ClientDir)appsettings.json')">
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

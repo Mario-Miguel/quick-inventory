@@ -1,0 +1,12 @@
+{
+  "AppName": "Museo de la Sidra",
+  "Colors": {
+    "Primary": "#2F5D2A",
+    "Secondary": "#C8922A",
+    "Background": "#FAF7F2"
+  },
+  "Features": {
+    "Verifactu": true,
+    "PrestaShop": true
+  }
+}

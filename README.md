@@ -61,6 +61,64 @@ dotnet run --project src/QuickInventory.Desktop
 
 Con la app en modo Debug puedes pulsar **F12** dentro de la ventana para abrir las herramientas de desarrollo (como en el navegador).
 
+## Clientes
+
+La misma aplicación se puede compilar para distintos clients. Cada uno tiene una carpeta en `clients/`
+con su `client.json`:
+
+```json
+{
+  "AppName": "Museo de la Sidra",
+  "Colors": { "Primary": "#2F5D2A", "Secondary": "#C8922A", "Background": "#FAF7F2" },
+  "Features": { "Verifactu": true, "PrestaShop": true },
+  "Issuer": { "Nif": "G33123456", "LegalName": "Fundación ...", "Address": "..." }
+}
+```
+
+- `AppName`: nombre de la barra superior, del título de la ventana y de los avisos.
+- `Colors`: colores en formato `#RRGGBB`. `Primary` es el de los botones y la barra superior.
+- `Features`: módulos opcionales. Sin `PrestaShop` desaparecen «Entradas online» y «Tienda online».
+  `Verifactu` todavía no cambia nada: la app aún no envía facturas (ver `docs/verifactu.md`).
+- `Issuer` (opcional): datos fiscales del titular. Si están, el asistente de la primera instalación sale ya
+  relleno y solo hay que confirmarlos. Si no, se escriben a mano en el asistente.
+
+El `client.json` va **dentro del ejecutable**: el client no puede cambiarlo, y para cambiar algo hay que volver a
+compilar. Si tiene algún error, la app avisa al arrancar y se cierra.
+
+La **conexión** no va en `client.json`, porque lleva la contraseña: se pone en `clients/<id>/appsettings.json`
+(mismo formato que en [Conexión](#conexión), está en `.gitignore`) y se copia junto al `.exe`. Si no existe, cada
+equipo usa su `%LOCALAPPDATA%\QuickInventory\appsettings.json` como siempre.
+
+Para generar el ejecutable de un client (sirve también desde Linux/WSL):
+
+```bash
+dotnet publish src/QuickInventory.Desktop -c Release -r win-x64 --self-contained -p:Client=<id> -o publish/<id>
+```
+
+Sale una carpeta `publish/<id>` con `QuickInventory.exe`, que se copia tal cual al equipo del client. Con
+`--self-contained` no hace falta instalar .NET en ese equipo (WebView2 sí, pero ya viene con Windows 10/11).
+Sin `-p:Client`, también al pulsar F5, se compila `museo-sidra`. `clients/ejemplo` es un client de muestra con
+otros colores, sin módulos opcionales y con los datos fiscales rellenos.
+
+**Probar otro client al depurar.** En Debug el ejecutable lleva dentro todos los clients, y la variable de
+entorno `QUICKINVENTORY_CLIENT=<id>` elige con cuál arranca (sin ella, el compilado). No hace falta recompilar:
+
+- VS Code: al pulsar F5 pregunta el client (lista `inputs` de `.vscode/launch.json`).
+- Terminal: `QUICKINVENTORY_CLIENT=ejemplo dotnet run --project src/QuickInventory.Desktop`.
+
+En Release la variable no hace nada: solo va dentro el client compilado.
+
+Para un client nuevo: copia `clients/ejemplo` a `clients/<id>` y cambia su `client.json`. Para depurarlo, añade su id
+a la lista de `.vscode/launch.json`.
+
+## Publicar versiones
+
+GitHub Actions pasa los tests en cada push (`.github/workflows/ci.yml`) y, al subir un tag `<client>/v<versión>`
+(p. ej. `museo-sidra/v1.3.0`), compila el ejecutable de ese client, aplica las migraciones a su base y publica
+la versión (`publish.yml`). Los equipos del client ven el botón «Actualizar a la versión X» y se actualizan
+solos. Cada client tiene sus propias versiones. Cómo configurarlo y cómo instalar un equipo nuevo:
+[docs/publicacion.md](docs/publicacion.md).
+
 ## Estructura
 
 ```
@@ -71,6 +129,7 @@ src/
 ├── QuickInventory.UI        Pantallas Blazor (Razor Class Library).
 ├── QuickInventory.Desktop   Ventana WPF que aloja las pantallas.
 └── QuickInventory.Verifactu Librería VERI*FACTU: registros, huella, QR y envío a la AEAT. Sin dependencias.
+clients/                    Personalización de cada client (ver «Clientes»).
 tests/
 ├── QuickInventory.Core.Tests       Tests (xUnit) de las reglas de Core.
 └── QuickInventory.Verifactu.Tests  Tests de la librería VERI*FACTU.

@@ -1,0 +1,17 @@
+{
+  "AppName": "Bodega de Ejemplo",
+  "Colors": {
+    "Primary": "#1E3A8A",
+    "Secondary": "#B45309",
+    "Background": "#F8FAFC"
+  },
+  "Features": {
+    "Verifactu": false,
+    "PrestaShop": false
+  },
+  "Issuer": {
+    "Nif": "B12345674",
+    "LegalName": "Bodega de Ejemplo, S.L.",
+    "Address": "Calle Mayor 1, 33000 Oviedo"
+  }
+}

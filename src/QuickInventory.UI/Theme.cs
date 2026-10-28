@@ -1,17 +1,19 @@
 using MudBlazor;
+using QuickInventory.Core.Models;
 
 namespace QuickInventory.UI;
 
 public static class Theme
 {
-    public static readonly MudTheme Museo = new()
+    /// <summary>Tema con los colores del cliente (ver <see cref="ClientSettings"/>).</summary>
+    public static MudTheme For(ClientColors colors) => new()
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#2F5D2A",          // verde manzana oscuro
-            Secondary = "#C8922A",        // ámbar sidra
-            AppbarBackground = "#2F5D2A",
-            Background = "#FAF7F2",
+            Primary = colors.Primary,
+            Secondary = colors.Secondary,
+            AppbarBackground = colors.Primary,
+            Background = colors.Background,
             Warning = "#D97706",
         },
         Typography = new Typography
