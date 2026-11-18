@@ -16,8 +16,9 @@
                 <ProviderPicker Provider="provider" ProviderChanged="SelectProvider" />
 
                 <div class="d-flex gap-4">
+                    @* Immediate: el botón Guardar se activa al escribir, sin tener que salir del campo. *@
                     <MudTextField T="string" @bind-Value="Invoice.Number" Label="Nº de factura" Required="true"
-                                  RequiredError="Escribe el número de la factura"
+                                  RequiredError="Escribe el número de la factura" Immediate="true"
                                   MaxLength="PurchaseInvoice.MaxNumberLength" Variant="Variant.Outlined" />
                     <MudDatePicker @bind-Date="invoiceDate" Label="Fecha de la factura" MaxDate="DateTime.Today"
                                    HelperText="La que pone la factura" Editable="true" Required="true"
@@ -260,8 +261,13 @@
         </MudForm>
     </DialogContent>
     <DialogActions>
+        @* Con el botón desactivado se dice qué falta, para que no parezca que no funciona. *@
+        @if (Missing is { } missing)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mr-auto ml-4">Falta: @missing.</MudText>
+        }
         <MudButton Size="Size.Large" OnClick="Cancel">Cancelar</MudButton>
-        <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary" Disabled="saving" OnClick="Save">
+        <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary" Disabled="@(saving || Missing is not null)" OnClick="Save">
             Guardar
         </MudButton>
     </DialogActions>
@@ -289,6 +295,29 @@
     private DateTime? paymentDate = DateTime.Today;
     private PaymentMethod? paymentMethod;
     private SalesPoint? paymentSalesPoint;
+
+    /// <summary>
+    /// Lo que falta para poder guardar ("el proveedor y el número de la factura"), o null si está todo.
+    /// Mientras falte algo, el botón Guardar está desactivado. El resto (archivo, fechas...) se comprueba al guardar.
+    /// </summary>
+    private string? Missing
+    {
+        get
+        {
+            List<string> missing = [];
+            if (provider is null) missing.Add("el proveedor");
+            if (string.IsNullOrWhiteSpace(Invoice.Number)) missing.Add("el número de la factura");
+            if (Invoice.Lines.Count == 0) missing.Add("lo que viene en la factura (artículos, albaranes o líneas)");
+            if (paid && paymentMethod is null) missing.Add("cómo se pagó");
+
+            return missing.Count switch
+            {
+                0 => null,
+                1 => missing[0],
+                _ => string.Join(", ", missing[..^1]) + " y " + missing[^1],
+            };
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
