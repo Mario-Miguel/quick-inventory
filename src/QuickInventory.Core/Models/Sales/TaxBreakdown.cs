@@ -35,6 +35,27 @@ public static class TaxBreakdown
             .ThenBy(i => i.TaxExemption?.Value)
     ];
 
+    /// <summary>
+    /// Desglose de una factura a un cliente, cuyas líneas llevan el precio <b>sin</b> IVA: por cada tipo,
+    /// base = suma de las bases de sus líneas y cuota = base × tipo / 100, redondeada a céntimos (por tipo,
+    /// no por línea, que es como se hace en las facturas). Las exentas van aparte, con cuota 0. Mismo orden
+    /// que <see cref="Calculate"/>.
+    /// </summary>
+    public static IReadOnlyList<TaxBreakdownItem> FromBases(IEnumerable<CustomerInvoiceLine> lines) =>
+    [
+        .. lines
+            .GroupBy(l => (Rate: l.TaxRate?.Value, l.TaxExemption))
+            .Select(g =>
+            {
+                var taxBase = g.Sum(l => l.BaseAmount);
+                var tax = g.Key.Rate is { } rate ? Math.Round(taxBase * rate / 100m, 2, MidpointRounding.AwayFromZero) : 0m;
+                return new TaxBreakdownItem(g.Key.Rate, g.Key.Rate is null ? g.Key.TaxExemption : null, taxBase, tax, taxBase + tax);
+            })
+            .OrderBy(i => i.TaxRate is not null ? 0 : 1)
+            .ThenByDescending(i => i.TaxRate)
+            .ThenBy(i => i.TaxExemption?.Value)
+    ];
+
     private static TaxBreakdownItem Item(decimal? taxRate, TaxExemption? taxExemption, decimal total)
     {
         if (taxRate is { } rate)

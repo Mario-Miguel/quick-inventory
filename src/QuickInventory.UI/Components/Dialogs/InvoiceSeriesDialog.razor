@@ -2,22 +2,26 @@
     <DialogContent>
         <MudForm @ref="form">
             <MudStack Spacing="3">
-                <MudText Class="mud-text-secondary">La serie es la misma para Taquilla y Tienda.</MudText>
+                <MudText Class="mud-text-secondary">
+                    @(ForCustomerInvoices
+                        ? "Numera las facturas a clientes (colegios, asociaciones...). Va aparte de la de los tickets."
+                        : "La serie es la misma para Taquilla y Tienda.")
+                </MudText>
 
                 <MudNumericField T="int" Value="series.Year" ValueChanged="ChangeYear" Label="Año"
                                  Min="2000" Max="@(DateTime.Now.Year + 1)" Variant="Variant.Outlined" />
 
                 <MudTextField T="string" @bind-Value="series.Code" Label="Código de la serie" Required="true"
-                              RequiredError="Escribe el código de la serie" MaxLength="InvoiceSeries.MaxCodeLength"
-                              HelperText="Va delante del número en cada ticket. Solo letras sin tilde, números, «-» y «/»"
+                              RequiredError="Escribe el código de la serie" MaxLength="NumberingSeries.MaxCodeLength"
+                              HelperText="@(ForCustomerInvoices ? "Va delante del número en cada factura. Solo letras sin tilde, números, «-» y «/»" : "Va delante del número en cada ticket. Solo letras sin tilde, números, «-» y «/»")"
                               Immediate="true" Variant="Variant.Outlined" />
 
-                <MudNumericField T="int" @bind-Value="series.LastNumber" Label="Número del último ticket emitido"
-                                 HelperText="Si este año ya se han hecho tickets con esta serie (por ejemplo, con otro programa), escribe el número del último. Si no, deja 0"
+                <MudNumericField T="int" @bind-Value="series.LastNumber" Label="@(ForCustomerInvoices ? "Número de la última factura emitida" : "Número del último ticket emitido")"
+                                 HelperText="@(ForCustomerInvoices ? "Si este año ya se han hecho facturas con esta serie (por ejemplo, con otro programa), escribe el número de la última. Si no, deja 0" : "Si este año ya se han hecho tickets con esta serie (por ejemplo, con otro programa), escribe el número del último. Si no, deja 0")"
                                  Min="0" Immediate="true" Variant="Variant.Outlined" />
 
                 <MudAlert Severity="Severity.Info" Dense="true">
-                    El próximo ticket será el <b>@Preview</b>.
+                    @(ForCustomerInvoices ? "La próxima factura será la" : "El próximo ticket será el") <b>@Preview</b>.
                 </MudAlert>
             </MudStack>
         </MudForm>
@@ -31,21 +35,27 @@
 @code {
     [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
 
-    [Parameter, EditorRequired] public InvoiceSeries Series { get; set; } = default!;
+    [Parameter, EditorRequired] public NumberingSeries Series { get; set; } = default!;
 
-    private InvoiceSeries series = default!;
+    /// <summary>True si es una serie de facturas a clientes; si no, de tickets. Cambia los textos y el código propuesto.</summary>
+    [Parameter] public bool ForCustomerInvoices { get; set; }
+
+    private string SuggestCode(int year) =>
+        ForCustomerInvoices ? CustomerInvoiceSeries.SuggestedCode(year) : InvoiceSeries.SuggestedCode(year);
+
+    private NumberingSeries series = default!;
     private MudForm form = default!;
 
-    private string Preview => InvoiceSeries.FormatInvoiceId(series.Code.Trim().ToUpperInvariant(), series.LastNumber + 1);
+    private string Preview => NumberingSeries.FormatInvoiceId(series.Code.Trim().ToUpperInvariant(), series.LastNumber + 1);
 
     protected override void OnInitialized() => series = Series;
 
     // Si el código es el propuesto, cambia con el año; si lo han escrito a mano, se respeta.
     private void ChangeYear(int year)
     {
-        var suggested = series.Code == InvoiceSeries.SuggestedCode(series.Year);
+        var suggested = series.Code == SuggestCode(series.Year);
         series.Year = year;
-        if (suggested) series.Code = InvoiceSeries.SuggestedCode(series.Year);
+        if (suggested) series.Code = SuggestCode(series.Year);
     }
 
     private async Task Save()

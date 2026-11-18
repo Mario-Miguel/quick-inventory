@@ -1,0 +1,63 @@
+<!--
+  Plantilla de factura: «Compacta».
+  Los marcadores entre llaves dobles se cambian por los datos de cada factura. Lista completa en Admin → Diseño de factura.
+  Los estilos van dentro de .factura para no cambiar el resto de la aplicación.
+-->
+<style>
+  .factura { background: {{color.fondo}}; color: #000; min-height: 296mm; box-sizing: border-box; padding: 12mm;
+             display: flex; flex-direction: column; font-family: "Segoe UI", Arial, sans-serif; font-size: 12px; line-height: 1.35; }
+  .factura .cabecera { display: flex; justify-content: space-between; align-items: center; gap: 16px;
+                       border-bottom: 2px solid {{color.acento}}; padding-bottom: 8px; margin-bottom: 14px; }
+  .factura .logo { max-height: 48px; max-width: 160px; }
+  .factura .emisor { display: flex; align-items: center; gap: 12px; }
+  .factura .emisor b { font-size: 14px; }
+  .factura .titulo { text-align: right; }
+  .factura .titulo b.palabra { color: {{color.acento}}; font-size: 16px; letter-spacing: 1px; }
+  .factura .cliente { margin-bottom: 14px; }
+  .factura .etiqueta { color: {{color.acento}}; font-weight: 600; }
+  .factura table { border-collapse: collapse; }
+  .factura .lineas { width: 100%; }
+  .factura .lineas th { text-align: left; border-bottom: 1px solid #000; padding: 3px 6px; }
+  .factura .lineas td { border-bottom: 1px solid #e5e5e5; padding: 3px 6px; }
+  .factura .num { text-align: right; white-space: nowrap; }
+  .factura .totales { margin: 10px 0 0 auto; }
+  .factura .totales td { padding: 2px 6px; }
+  .factura .total td { border-top: 1px solid #000; font-size: 14px; font-weight: 700; }
+  .factura .observaciones { margin-top: 14px; }
+  .factura .pie { margin-top: auto; padding-top: 10px; font-size: 11px; color: #444; }
+</style>
+<div class="factura">
+  <div class="cabecera">
+    <div class="emisor">
+      {{#logo}}<img class="logo" src="{{logo}}" alt="">{{/logo}}
+      <div><b>{{emisor.nombre}}</b> · NIF {{emisor.nif}}{{#emisor.direccion}}<br>{{emisor.direccion}}{{/emisor.direccion}}</div>
+    </div>
+    <div class="titulo"><b class="palabra">FACTURA</b> {{numero}}<br>{{fecha}}</div>
+  </div>
+
+  <div class="cliente">
+    <span class="etiqueta">Cliente:</span> <b>{{cliente.nombre}}</b> · NIF {{cliente.nif}} · {{cliente.direccion}}
+  </div>
+
+  <table class="lineas">
+    <thead>
+      <tr><th>Concepto</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">IVA</th><th class="num">Importe</th></tr>
+    </thead>
+    <tbody>
+      {{#lineas}}
+      <tr><td>{{concepto}}</td><td class="num">{{cantidad}}</td><td class="num">{{precio}}</td><td class="num">{{tipo_iva}}</td><td class="num">{{importe}}</td></tr>
+      {{/lineas}}
+    </tbody>
+  </table>
+
+  <table class="totales">
+    {{#impuestos}}
+    <tr><td>Base {{tipo}}</td><td class="num">{{base}}</td>{{^exenta}}<td>IVA</td><td class="num">{{cuota}}</td>{{/exenta}}</tr>
+    {{/impuestos}}
+    <tr class="total"><td>Total</td><td class="num" colspan="3">{{total}}</td></tr>
+  </table>
+
+  {{#observaciones}}<div class="observaciones"><span class="etiqueta">Observaciones:</span> {{observaciones}}</div>{{/observaciones}}
+
+  {{#pie}}<div class="pie">{{pie}}</div>{{/pie}}
+</div>

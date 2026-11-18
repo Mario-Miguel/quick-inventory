@@ -7,4 +7,9 @@
     <RootNamespace>QuickInventory.Core</RootNamespace>
   </PropertyGroup>
 
+  <!-- Disposiciones de la factura a clientes que vienen con la aplicación (ver InvoiceTemplate.Builtin). -->
+  <ItemGroup>
+    <EmbeddedResource Include="Models\Invoices\Templates\*.html" LogicalName="QuickInventory.Core.Models.Templates.%(Filename).html" />
+  </ItemGroup>
+
 </Project>
