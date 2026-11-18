@@ -76,4 +76,12 @@
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- Solo en Debug: la conexión de cada client en clients/<id>/appsettings.json, para que al elegir uno
+       en launch.json (QUICKINVENTORY_CLIENT) se use su base y no la del compilado (ver App.LoadConfiguration).
+       Nunca en Release: llevan contraseñas. -->
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <None Include="$(MSBuildThisFileDirectory)..\..\clients\**\appsettings.json"
+          Link="clients\%(RecursiveDir)appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

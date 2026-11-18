@@ -7,8 +7,8 @@ public enum CashMovementType
 }
 
 /// <summary>
-/// Input o salida de dinero que no es una venta de mostrador:
-/// subvenciones, visitas concertadas, pagos a proveedores, facturas, reembolsos, etc.
+/// Entrada o salida de dinero que no es una venta de mostrador ni una factura de proveedor:
+/// subvenciones, visitas concertadas, etc. Preparado para los módulos de Ingresos y Pagos.
 /// </summary>
 public class CashMovement
 {
@@ -27,7 +27,7 @@ public class CashMovement
     /// Los movimientos en efectivo de una caja se tienen en cuenta al cerrarla.
     /// </summary>
     public SalesPoint? SalesPoint { get; set; }
-    /// <summary>Persona a la que se paga o que paga (por ejemplo, el trabajador al que se le reembolsa).</summary>
+    /// <summary>Persona a la que se paga o que paga.</summary>
     public string? Person { get; set; }
     public string? InvoiceNumber { get; set; }
     /// <summary>
@@ -37,11 +37,5 @@ public class CashMovement
     public string? InvoiceFileName { get; set; }
     /// <summary>Anulado por error. No se borra para que quede el historial.</summary>
     public bool Canceled { get; set; }
-
-    /// <summary>
-    /// Categoría de los reembolsos: dinero que se devuelve a un trabajador que pagó
-    /// una compra del museo y trae la factura.
-    /// </summary>
-    public const string RefundCategory = "Reembolso";
 }
 

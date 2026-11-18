@@ -22,10 +22,11 @@ public static class DataConfiguration
             .AddInterceptors(new ConnectionFailureInterceptor(monitor)));
         services.AddScoped<IInventoryService, InventoryService>();
         services.AddScoped<ISalesService, SalesService>();
-        services.AddScoped<IRefundService, RefundService>();
         services.AddScoped<IOnlineTicketService, PrestaShopTicketService>();
         services.AddScoped<IIssuerService, IssuerService>();
         services.AddScoped<IInvoiceSeriesService, InvoiceSeriesService>();
+        services.AddScoped<IProviderService, ProviderService>();
+        services.AddScoped<IPurchaseInvoiceService, PurchaseInvoiceService>();
         return services;
     }
 

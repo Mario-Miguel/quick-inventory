@@ -1,0 +1,66 @@
+@* Fecha y forma de pago de una factura de proveedor. Lo usan el diálogo de nueva factura y el de
+   "Marcar como pagada". Si se paga en efectivo hay que elegir la caja: se resta al cerrarla ese día. *@
+<MudStack Spacing="3">
+    <MudDatePicker Date="Date" DateChanged="DateChanged" Label="Fecha de pago" MaxDate="DateTime.Today"
+                   Editable="true" Required="true" RequiredError="Elige el día en que se pagó"
+                   Variant="Variant.Outlined" />
+
+    <div>
+        <MudText Typo="Typo.subtitle1" Class="mb-2">¿Cómo se pagó?</MudText>
+        @* Botones grandes en vez de un desplegable; el elegido va relleno. *@
+        <MudGrid Spacing="2">
+            @foreach (var option in Options)
+            {
+                <MudItem xs="12" sm="6">
+                    <MudButton Variant="@(IsSelected(option) ? Variant.Filled : Variant.Outlined)"
+                               Color="Color.Primary" FullWidth="true" StartIcon="@option.Icon"
+                               OnClick="() => Select(option)">
+                        @option.Name
+                    </MudButton>
+                </MudItem>
+            }
+        </MudGrid>
+        @if (SalesPoint is { } salesPoint)
+        {
+            <MudText Typo="Typo.body2" Class="mt-2">
+                Se restará al cerrar la caja de @ActiveProfile.Name(salesPoint)
+                @(Date?.Date == DateTime.Today ? "de hoy" : $"del {Date:dd/MM/yyyy}").
+            </MudText>
+        }
+        else if (ShowErrors && Method is null)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Error" Class="mt-2">Elige cómo se pagó.</MudText>
+        }
+    </div>
+</MudStack>
+
+@code {
+    [Parameter] public DateTime? Date { get; set; }
+    [Parameter] public EventCallback<DateTime?> DateChanged { get; set; }
+    [Parameter] public PaymentMethod? Method { get; set; }
+    [Parameter] public EventCallback<PaymentMethod?> MethodChanged { get; set; }
+    /// <summary>Caja de la que sale el dinero (solo en efectivo).</summary>
+    [Parameter] public SalesPoint? SalesPoint { get; set; }
+    [Parameter] public EventCallback<SalesPoint?> SalesPointChanged { get; set; }
+    /// <summary>Marca lo que falta (después de pulsar Guardar).</summary>
+    [Parameter] public bool ShowErrors { get; set; }
+
+    /// <summary>Formas de pagar: en efectivo siempre sale de una caja; con tarjeta o transferencia, de ninguna.</summary>
+    private sealed record Option(string Name, string Icon, PaymentMethod Method, SalesPoint? SalesPoint);
+
+    private static readonly Option[] Options =
+    [
+        new("Caja de Taquilla", ActiveProfile.Icon(Core.Models.SalesPoint.TicketOffice), PaymentMethod.Cash, Core.Models.SalesPoint.TicketOffice),
+        new("Caja de Tienda", ActiveProfile.Icon(Core.Models.SalesPoint.Shop), PaymentMethod.Cash, Core.Models.SalesPoint.Shop),
+        new("Tarjeta", PaymentMethods.Icon(PaymentMethod.Card), PaymentMethod.Card, null),
+        new("Transferencia", PaymentMethods.Icon(PaymentMethod.BankTransfer), PaymentMethod.BankTransfer, null),
+    ];
+
+    private bool IsSelected(Option option) => Method == option.Method && SalesPoint == option.SalesPoint;
+
+    private async Task Select(Option option)
+    {
+        await MethodChanged.InvokeAsync(option.Method);
+        await SalesPointChanged.InvokeAsync(option.SalesPoint);
+    }
+}

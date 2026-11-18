@@ -107,16 +107,26 @@ public partial class App : Application
     /// <summary>
     /// Configuración por capas; cada una sustituye a la anterior:
     /// <list type="number">
-    /// <item>appsettings.json junto al .exe (opcional; no está en el repo porque lleva la contraseña).</item>
+    /// <item>appsettings.json junto al .exe (opcional; no está en el repo porque lleva la contraseña).
+    /// En Debug, si se ha elegido un client con QUICKINVENTORY_CLIENT, el suyo: clients/&lt;id&gt;/appsettings.json.</item>
     /// <item>%LOCALAPPDATA%\QuickInventory\appsettings.json, para la conexión de cada equipo.</item>
     /// <item>Variables de entorno QUICKINVENTORY_..., p. ej. QUICKINVENTORY_ConnectionStrings__Museo.</item>
     /// </list>
     /// </summary>
     private static IConfiguration LoadConfiguration() => new ConfigurationBuilder()
-        .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"), optional: true)
+        .AddJsonFile(AppSettingsPath(), optional: true)
         .AddJsonFile(UserSettingsPath, optional: true)
         .AddEnvironmentVariables("QUICKINVENTORY_")
         .Build();
+
+    /// <summary>
+    /// El appsettings.json junto al .exe es el del client compilado. En Debug se copian también los de
+    /// todos los clients (ver el .csproj) para que cada uno use su propia base, y no la del compilado.
+    /// </summary>
+    private static string AppSettingsPath() =>
+        ClientSettingsLoader.DebugClientId() is { } id
+            ? Path.Combine(AppContext.BaseDirectory, "clients", id, "appsettings.json")
+            : Path.Combine(AppContext.BaseDirectory, "appsettings.json");
 
     private static string UserSettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

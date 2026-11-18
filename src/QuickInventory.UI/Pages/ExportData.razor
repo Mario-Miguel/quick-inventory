@@ -1,10 +1,10 @@
 @page "/export"
 @inject ISalesService SalesService
-@inject IRefundService RefundService
+@inject IPurchaseInvoiceService PurchaseInvoiceService
 @inject IFileSaver FileSaver
 @inject ISnackbar Warnings
 
-<h1 class="page-title">Exportar ventas</h1>
+<h1 class="page-title">Exportar datos</h1>
 
 <div class="d-flex align-center flex-wrap gap-4 mb-4">
     @* Selector de mes: flechas grandes en vez de un calendario. *@
@@ -84,11 +84,18 @@ else
             <MudText Typo="Typo.body2">
                 Total sin anuladas: <b>@ToExport.Where(s => !s.Canceled).Sum(s => s.Total).ToString("C")</b>
             </MudText>
-            @* Los reembolsos no se eligen uno a uno: van todos los del mes en su propia hoja del Excel. *@
+            @* Las facturas de proveedores no se eligen una a una: van todas las del mes (por la fecha de
+               la factura) en su propia hoja del Excel. *@
             <MudText Typo="Typo.body2">
-                Reembolsos del mes (solo en Excel): @ValidRefunds.Count() ·
-                <b>@ValidRefunds.Sum(r => r.Amount).ToString("C")</b>
-                · @refunds.Count(r => r.InvoiceFileName is not null) con factura adjunta
+                Facturas de proveedores del mes (solo en Excel): @ValidInvoices.Count() ·
+                <b>@ValidInvoices.Sum(i => i.Amount).ToString("C")</b>
+                (IVA soportado @ValidInvoices.Sum(i => i.TaxAmount).ToString("C"))
+            </MudText>
+            @* El Total del Excel resume el dinero: ventas menos lo pagado a proveedores en el mes (por fecha de pago). *@
+            <MudText Typo="Typo.body2">
+                Pagado a proveedores este mes: @paidInvoices.Count @(paidInvoices.Count == 1 ? "factura" : "facturas") ·
+                <b>@paidInvoices.Sum(i => i.Amount).ToString("C")</b>
+                · Saldo (ventas − pagos): <b>@(ToExport.Where(s => !s.Canceled).Sum(s => s.Total) - paidInvoices.Sum(i => i.Amount)).ToString("C")</b>
             </MudText>
         </div>
         <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
@@ -97,13 +104,13 @@ else
             Exportar CSV
         </MudButton>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
-                   StartIcon="@Icons.Material.Filled.TableView" Disabled="@((ToExport.Count == 0 && refunds.Count == 0) || saving)"
+                   StartIcon="@Icons.Material.Filled.TableView" Disabled="@((ToExport.Count == 0 && purchaseInvoices.Count == 0 && paidInvoices.Count == 0) || saving)"
                    OnClick="ExportExcel">
             Exportar Excel
         </MudButton>
-        @* Un ZIP con el Excel y una carpeta con las facturas; en el Excel cada factura es un enlace. *@
+        @* Un ZIP con el Excel y una carpeta con los archivos de las facturas de proveedores; en el Excel cada uno es un enlace. *@
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
-                   StartIcon="@Icons.Material.Filled.FolderZip" Disabled="@((ToExport.Count == 0 && refunds.Count == 0) || saving)"
+                   StartIcon="@Icons.Material.Filled.FolderZip" Disabled="@((ToExport.Count == 0 && purchaseInvoices.Count == 0 && paidInvoices.Count == 0) || saving)"
                    OnClick="ExportExcelWithInvoices">
             Exportar Excel con facturas
         </MudButton>
@@ -115,12 +122,13 @@ else
     private DateTime month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
 
     private List<Sale>? sales;
-    private List<CashMovement> refunds = [];
+    private List<PurchaseInvoice> purchaseInvoices = [];
+    private List<PurchaseInvoice> paidInvoices = [];
     private HashSet<Sale> selected = [];
     private string? searching;
     private bool saving;
 
-    private IEnumerable<CashMovement> ValidRefunds => refunds.Where(r => !r.Canceled);
+    private IEnumerable<PurchaseInvoice> ValidInvoices => purchaseInvoices.Where(i => !i.Canceled);
 
     private bool IsCurrentMonth => month.AddMonths(1) > DateTime.Today;
 
@@ -147,7 +155,8 @@ else
     {
         sales = null;
         sales = await SalesService.GetSalesAsync(month, month.AddMonths(1));
-        refunds = await RefundService.GetRefundsAsync(month, month.AddMonths(1));
+        purchaseInvoices = await PurchaseInvoiceService.GetInvoicesAsync(month, month.AddMonths(1));
+        paidInvoices = await PurchaseInvoiceService.GetPaidInvoicesAsync(month, month.AddMonths(1));
         selected = sales.Where(s => !s.Canceled).ToHashSet();
     }
 
@@ -162,28 +171,27 @@ else
         CultureInfo.CurrentCulture.CompareInfo.IndexOf(
             origin, text, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0;
 
-    private Task ExportCsv() => Export(SalesExport.ToCsv(ToExport), "csv");
+    // El CSV solo lleva ventas; el Excel y el ZIP, también las facturas de proveedores.
+    private Task ExportCsv() => Export(SalesExport.ToCsv(ToExport), $"Ventas {month:yyyy-MM}.csv");
 
-    private Task ExportExcel() => Export(SalesExport.ToExcel(ToExport, refunds), "xlsx");
+    private Task ExportExcel() => Export(SalesExport.ToExcel(ToExport, purchaseInvoices, paidInvoices), $"{BookName}.xlsx");
 
     private Task ExportExcelWithInvoices() => Export(async () =>
     {
-        var withInvoice = refunds.Where(r => r.InvoiceFileName is not null).Select(r => r.Id).ToList();
-        var invoices = await RefundService.GetInvoicesAsync(withInvoice);
-        return SalesExport.ToZipWithInvoices(ToExport, refunds, invoices, $"{FileName}.xlsx");
-    }, "zip");
+        var files = await PurchaseInvoiceService.GetInvoiceFilesAsync(purchaseInvoices.Select(i => i.Id).ToList());
+        return SalesExport.ToZipWithInvoices(ToExport, purchaseInvoices, paidInvoices, files, $"{BookName}.xlsx");
+    }, $"{BookName}.zip");
 
-    /// <summary>Nombre de los archivos exportados, sin extensión.</summary>
-    private string FileName => $"Ventas {month:yyyy-MM}";
+    /// <summary>Nombre del Excel y del ZIP, sin extensión.</summary>
+    private string BookName => $"Datos {month:yyyy-MM}";
 
-    private Task Export(byte[] content, string extension) => Export(() => Task.FromResult(content), extension);
+    private Task Export(byte[] content, string name) => Export(() => Task.FromResult(content), name);
 
-    private async Task Export(Func<Task<byte[]>> content, string extension)
+    private async Task Export(Func<Task<byte[]>> content, string name)
     {
         saving = true;
         try
         {
-            var name = $"{FileName}.{extension}";
             if (await FileSaver.SaveAsync(name, await content()))
                 Warnings.Add($"Archivo guardado: {name}", Severity.Success);
         }

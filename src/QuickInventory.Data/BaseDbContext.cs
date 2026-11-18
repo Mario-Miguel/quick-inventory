@@ -16,6 +16,9 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
     public DbSet<OnlineShopSettings> OnlineShopSettings => Set<OnlineShopSettings>();
     public DbSet<Issuer> Issuers => Set<Issuer>();
     public DbSet<InvoiceSeries> InvoiceSeries => Set<InvoiceSeries>();
+    public DbSet<Provider> Providers => Set<Provider>();
+    public DbSet<PurchaseInvoice> PurchaseInvoices => Set<PurchaseInvoice>();
+    public DbSet<PurchaseInvoiceLine> PurchaseInvoiceLines => Set<PurchaseInvoiceLine>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configuration)
     {
@@ -60,6 +63,7 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
         model.Entity<StockMovement>(e =>
         {
             e.HasOne(m => m.Product).WithMany().HasForeignKey(m => m.ProductId);
+            e.HasOne<PurchaseInvoice>().WithMany().HasForeignKey(m => m.PurchaseInvoiceId);
             e.HasIndex(m => m.Date);
         });
 
@@ -89,12 +93,15 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
             e.HasIndex(m => m.Date);
         });
 
-        // Como mucho una factura por movimiento.
+        // Como mucho un archivo por movimiento o por factura de proveedor, y siempre de uno de los dos.
         model.Entity<InvoiceFile>(e =>
         {
             e.Property(f => f.FileName).HasMaxLength(260).IsRequired();
             e.Property(f => f.ContentType).HasMaxLength(100);
-            e.HasOne<CashMovement>().WithOne().HasForeignKey<InvoiceFile>(f => f.CashMovementId);
+            e.HasOne<CashMovement>().WithOne().HasForeignKey<InvoiceFile>(f => f.CashMovementId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<PurchaseInvoice>().WithOne().HasForeignKey<InvoiceFile>(f => f.PurchaseInvoiceId).OnDelete(DeleteBehavior.Cascade);
+            e.ToTable(t => t.HasCheckConstraint("CK_InvoiceFiles_UnSoloDueno",
+                "num_nonnulls(\"CashMovementId\", \"PurchaseInvoiceId\") = 1"));
         });
 
         model.Entity<OnlineShopSettings>(e =>
@@ -118,6 +125,40 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
             e.Property(i => i.Code).HasMaxLength(Core.Models.InvoiceSeries.MaxCodeLength).IsRequired();
             e.HasIndex(s => s.Code).IsUnique();
             e.HasIndex(s => s.Year).IsUnique();
+        });
+
+        model.Entity<Provider>(e =>
+        {
+            e.Property(i => i.Nif).HasMaxLength(9);
+            e.Property(i => i.LegalName).HasMaxLength(Provider.MaxLegalNameLength).IsRequired();
+            e.Property(i => i.Address).HasMaxLength(Provider.MaxAddressLength);
+            e.Property(i => i.Email).HasMaxLength(Provider.MaxEmailLength);
+            e.Property(i => i.PhoneNumber).HasMaxLength(Provider.MaxPhoneNumberLength);
+            e.Property(i => i.Notes).HasMaxLength(Provider.MaxNotesLength);
+            e.HasIndex(i => i.Nif).IsUnique();
+        });
+
+        model.Entity<PurchaseInvoice>(e =>
+        {
+            e.Property(i => i.Number).HasMaxLength(PurchaseInvoice.MaxNumberLength).IsRequired();
+            e.Property(i => i.Notes).HasMaxLength(PurchaseInvoice.MaxNotesLength);
+            e.Property(i => i.InvoiceFileName).HasMaxLength(260).IsRequired();
+            e.Property(i => i.InvoiceDate).HasColumnType("date");
+            e.Property(i => i.PaymentDate).HasColumnType("date");
+            e.Ignore(i => i.IsPaid);
+            e.HasOne(i => i.Provider).WithMany().HasForeignKey(i => i.ProviderId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(i => i.InvoiceDate);
+            // La misma factura no se puede apuntar dos veces; las anuladas no cuentan.
+            e.HasIndex(i => new { i.ProviderId, i.Number }).IsUnique().HasFilter("\"Canceled\" = false");
+            e.HasMany(i => i.Lines).WithOne().HasForeignKey(l => l.PurchaseInvoiceId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<PurchaseInvoiceLine>(e =>
+        {
+            e.Property(l => l.Description).HasMaxLength(PurchaseInvoiceLine.MaxDescriptionLength).IsRequired();
+            e.HasOne(l => l.Product).WithMany().HasForeignKey(l => l.ProductId).OnDelete(DeleteBehavior.Restrict);
+            e.Ignore(l => l.BaseAmount);
+            e.Ignore(l => l.IsFree);
         });
     }
 }

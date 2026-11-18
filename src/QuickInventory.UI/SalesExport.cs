@@ -10,8 +10,8 @@ namespace QuickInventory.UI;
 /// Convierte una lista de ventas en un archivo CSV o Excel. En el CSV hay una fila por
 /// venta y la taquilla y la tienda se distinguen por la columna "Punto de venta". En el
 /// Excel van en hojas separadas, y cada venta lleva debajo el detalle de sus productos.
-/// El Excel lleva además una hoja con los reembolsos, y se puede exportar dentro de un ZIP
-/// junto con sus facturas.
+/// El Excel lleva además las facturas de proveedores (con sus líneas y el IVA soportado), y se
+/// puede exportar dentro de un ZIP junto con los archivos de esas facturas.
 /// </summary>
 public static class SalesExport
 {
@@ -61,18 +61,23 @@ public static class SalesExport
 
     /// <summary>
     /// Libro de Excel con una hoja por punto de venta ("Taquilla" y "Tienda"), para llevar
-    /// las cuentas por separado, otra con el desglose del IVA y otra con los reembolsos.
-    /// Cada hoja acaba con una fila con su total.
+    /// las cuentas por separado, otra con el desglose del IVA, otra con las facturas de
+    /// proveedores y otra con su IVA soportado. Cada hoja acaba con una fila con su total.
     /// </summary>
-    /// <param name="invoicePaths">
-    /// Ruta relativa al Excel de la factura de cada reembolso (por su Id). Si se pasa, la
-    /// columna "Factura adjunta" lleva un enlace al archivo; si no, solo dice si tiene.
+    /// <param name="purchaseInvoices">Facturas de proveedores del mes, por la fecha de la factura (hojas de facturas e IVA soportado).</param>
+    /// <param name="paidInvoices">
+    /// Facturas de proveedores pagadas en el mes, por la fecha de pago: son el dinero que sale, y van en la
+    /// hoja "Total" junto a las ventas para que sea un resumen de todo el dinero que entra y sale.
     /// </param>
-    public static byte[] ToExcel(IEnumerable<Sale> sales, IEnumerable<CashMovement> refunds,
-        IReadOnlyDictionary<int, string>? invoicePaths = null)
+    /// <param name="filePaths">
+    /// Ruta relativa al Excel del archivo de cada factura de proveedor (por su Id). Si se pasa,
+    /// la columna "Archivo" lleva un enlace al archivo; si no, solo su nombre.
+    /// </param>
+    public static byte[] ToExcel(IEnumerable<Sale> sales, IEnumerable<PurchaseInvoice> purchaseInvoices,
+        IEnumerable<PurchaseInvoice> paidInvoices, IReadOnlyDictionary<int, string>? filePaths = null)
     {
         using var book = new XLWorkbook();
-        AddSheet(book, null, [.. sales]);
+        AddSheet(book, null, [.. sales], [.. paidInvoices]);
 
         // Una hoja por tipo de venta. Salen siempre, aunque no tengan ventas, para que el
         // libro tenga siempre la misma forma.
@@ -80,7 +85,8 @@ public static class SalesExport
             AddSheet(book, saleType, [.. sales.Where(s => s.SalesPoint == saleType.SalesPoint)]);
 
         AddTaxSheet(book, [.. sales]);
-        AddRefundsSheet(book, [.. refunds], invoicePaths);
+        AddPurchaseInvoicesSheet(book, [.. purchaseInvoices], filePaths);
+        AddPurchaseTaxSheet(book, [.. purchaseInvoices]);
 
         using var stream = new MemoryStream();
         book.SaveAs(stream);
@@ -100,7 +106,11 @@ public static class SalesExport
     private const string EurosFormat = "#,##0.00 €";
 
     /// <param name="saleType">Tipo de venta de la hoja, o null para la hoja "Total" con todas.</param>
-    private static void AddSheet(XLWorkbook book, SaleType? saleType, List<Sale> sales)
+    /// <param name="paidInvoices">
+    /// Solo en la hoja "Total": facturas de proveedores pagadas, que salen mezcladas por fecha con las
+    /// ventas y con el importe en negativo (es dinero que sale). Debajo va el resumen del dinero del mes.
+    /// </param>
+    private static void AddSheet(XLWorkbook book, SaleType? saleType, List<Sale> sales, List<PurchaseInvoice>? paidInvoices = null)
     {
         var sheet = book.Worksheets.Add(saleType is null ? "Total" : ActiveProfile.Name(saleType.SalesPoint));
 
@@ -111,6 +121,8 @@ public static class SalesExport
         // con el detalle del precio y del descuento.
         List<ExcelColumn> columns =
         [
+            // En "Total" se mezclan ventas de los dos puntos de venta y pagos a proveedores.
+            .. saleType is null ? [new ExcelColumn(MovementHeader, s => $"Venta de {ActiveProfile.Name(s.SalesPoint)}", null)] : Array.Empty<ExcelColumn>(),
             new("ID", s => s.Id, null),
             new("Nº factura", s => s.InvoiceId ?? "", null),
             new("Fecha", s => s.Date.Date, null, "dd/mm/yyyy"),
@@ -137,9 +149,39 @@ public static class SalesExport
         for (var column = 0; column < columns.Count; column++)
             sheet.Cell(1, column + 1).Value = columns[column].Header;
 
+        int Col(string header) => columns.FindIndex(c => c.Header == header) + 1;
+
+        // Ventas y pagos a proveedores, por fecha. Los pagos solo tienen día, así que van al principio de ese día.
+        var movements = sales.Select(s => (Date: s.Date, Sale: (Sale?)s, Invoice: (PurchaseInvoice?)null))
+            .Concat((paidInvoices ?? []).Select(i => (Date: i.PaymentDate!.Value, Sale: (Sale?)null, Invoice: (PurchaseInvoice?)i)))
+            .OrderBy(m => m.Date)
+            .ToList();
+
         var row = 2;
-        foreach (var sale in sales)
+        foreach (var (_, movementSale, invoice) in movements)
         {
+            if (invoice is not null)
+            {
+                // Pago a proveedor: importes en negativo para que el total de la hoja sea lo que queda.
+                sheet.Cell(row, Col(MovementHeader)).Value = "Factura de proveedor";
+                sheet.Cell(row, Col("ID")).Value = invoice.Id;
+                sheet.Cell(row, Col("Nº factura")).Value = invoice.Number;
+                sheet.Cell(row, Col("Fecha")).Value = invoice.PaymentDate!.Value;
+                sheet.Cell(row, Col("Método de pago")).Value = PaymentMethods.Describe(invoice.PaymentMethod, invoice.PaymentSalesPoint);
+                sheet.Cell(row, Col("Anulada")).Value = YesNo(false);
+                sheet.Cell(row, Col("Producto")).Value = $"{invoice.Provider?.LegalName}: {invoice.Summary}";
+                sheet.Cell(row, Col("Cantidad")).Value = invoice.Lines.Sum(l => l.Quantity);
+                sheet.Cell(row, Col("IVA")).Value = string.Join(" + ", invoice.TaxBreakdown().Select(i => i.TaxRate.Name));
+                sheet.Cell(row, Col(TaxBaseHeader)).Value = -invoice.BaseAmount;
+                sheet.Cell(row, Col(TaxAmountHeader)).Value = -invoice.TaxAmount;
+                sheet.Cell(row, Col("Total")).Value = -invoice.Amount;
+                sheet.Row(row).Style.Font.Bold = true;
+                sheet.Row(row).Style.Fill.BackgroundColor = XLColor.FromHtml("#FDF0E6");
+                row++;
+                continue;
+            }
+
+            var sale = movementSale!;
             var saleRow = sheet.Row(row);
             for (var column = 0; column < columns.Count; column++)
                 if (columns[column].SaleValue is { } value)
@@ -183,10 +225,70 @@ public static class SalesExport
             if (columns[column].Format is { } format)
                 sheet.Column(column + 1).Style.NumberFormat.Format = format;
 
+        if (paidInvoices is not null)
+            AddMoneySummary(sheet, row + 2, sales, paidInvoices);
+
         sheet.Outline.SummaryVLocation = XLOutlineSummaryVLocation.Top;
         sheet.Row(1).Style.Font.Bold = true;
         sheet.SheetView.FreezeRows(1);
         sheet.Columns().AdjustToContents();
+    }
+
+    private const string MovementHeader = "Movimiento";
+
+    /// <summary>
+    /// Resumen del dinero del mes al pie de la hoja "Total": lo que entra por las ventas de cada punto
+    /// de venta y lo que sale por las facturas de proveedores pagadas, por forma de pago, y el saldo.
+    /// No cuenta las ventas anuladas.
+    /// </summary>
+    private static void AddMoneySummary(IXLWorksheet sheet, int firstRow, List<Sale> sales, List<PurchaseInvoice> paidInvoices)
+    {
+        var methods = Enum.GetValues<PaymentMethod>();
+        var row = firstRow;
+
+        sheet.Cell(row, 1).Value = "Resumen del dinero del mes";
+        sheet.Cell(row, 1).Style.Font.Bold = true;
+        sheet.Cell(row, 1).Style.Font.FontSize = 13;
+        row++;
+
+        var header = sheet.Row(row);
+        sheet.Cell(row, 1).Value = "Concepto";
+        for (var i = 0; i < methods.Length; i++)
+            sheet.Cell(row, i + 2).Value = PaymentMethods.Name(methods[i]);
+        sheet.Cell(row, methods.Length + 2).Value = "Total";
+        header.Style.Font.Bold = true;
+        row++;
+
+        var firstValueRow = row;
+        void AddLine(string concept, Func<PaymentMethod, decimal> amount)
+        {
+            sheet.Cell(row, 1).Value = concept;
+            for (var i = 0; i < methods.Length; i++)
+                sheet.Cell(row, i + 2).Value = amount(methods[i]);
+            var first = sheet.Column(2).ColumnLetter();
+            var last = sheet.Column(methods.Length + 1).ColumnLetter();
+            sheet.Cell(row, methods.Length + 2).FormulaA1 = $"SUM({first}{row}:{last}{row})";
+            row++;
+        }
+
+        var valid = sales.Where(s => !s.Canceled).ToList();
+        foreach (var saleType in SaleTypes.All)
+            AddLine($"+ Ventas de {ActiveProfile.Name(saleType.SalesPoint)}",
+                m => valid.Where(s => s.SalesPoint == saleType.SalesPoint && s.PaymentMethod == m).Sum(s => s.Total));
+        AddLine("− Facturas de proveedores pagadas",
+            m => -paidInvoices.Where(i => i.PaymentMethod == m).Sum(i => i.Amount));
+
+        sheet.Cell(row, 1).Value = "Saldo";
+        for (var column = 2; column <= methods.Length + 2; column++)
+        {
+            var letter = sheet.Column(column).ColumnLetter();
+            sheet.Cell(row, column).FormulaA1 = $"SUM({letter}{firstValueRow}:{letter}{row - 1})";
+        }
+        sheet.Row(row).Style.Font.Bold = true;
+
+        sheet.Range(firstRow + 1, 2, row, methods.Length + 2).Style.NumberFormat.Format = EurosFormat;
+        sheet.Range(firstRow + 1, 1, row, methods.Length + 2).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        sheet.Range(row, 1, row, methods.Length + 2).Style.Border.TopBorder = XLBorderStyleValues.Thin;
     }
 
     private const string TaxBaseHeader = "Base imponible";
@@ -247,24 +349,24 @@ public static class SalesExport
     }
 
     /// <summary>
-    /// ZIP con el Excel (<paramref name="excelName"/>) y una carpeta "Facturas" con las
-    /// facturas de los reembolsos. En el Excel cada factura es un enlace relativo, así que
+    /// ZIP con el Excel (<paramref name="excelName"/>) y una carpeta "Facturas" con los archivos
+    /// de las facturas de proveedores. En el Excel cada archivo es un enlace relativo, así que
     /// funciona en cualquier ordenador una vez descomprimido el ZIP.
     /// </summary>
-    public static byte[] ToZipWithInvoices(IEnumerable<Sale> sales, IEnumerable<CashMovement> refunds,
-        IEnumerable<InvoiceFile> invoices, string excelName)
+    public static byte[] ToZipWithInvoices(IEnumerable<Sale> sales, IEnumerable<PurchaseInvoice> purchaseInvoices,
+        IEnumerable<PurchaseInvoice> paidInvoices, IEnumerable<InvoiceFile> files, string excelName)
     {
-        // Nombres sin espacios ni tildes ("Facturas/Reembolso-12.pdf") para que el enlace
-        // funcione igual en todos los Excel. El nombre original sigue saliendo en la celda.
-        var invoiceList = invoices.ToList();
-        var paths = invoiceList.ToDictionary(f => f.CashMovementId, f => $"Facturas/Reembolso-{f.CashMovementId}{f.Extension}");
+        // Nombres sin espacios ni tildes ("Facturas/Factura-12.pdf") para que el enlace funcione
+        // igual en todos los Excel. El nombre original sigue saliendo en la celda.
+        var fileList = files.Where(f => f.PurchaseInvoiceId is not null).ToList();
+        var paths = fileList.ToDictionary(f => f.PurchaseInvoiceId!.Value, f => $"Facturas/Factura-{f.PurchaseInvoiceId}{f.Extension}");
 
         using var stream = new MemoryStream();
         using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
         {
-            AddEntry(zip, excelName, ToExcel(sales, refunds, paths));
-            foreach (var invoice in invoiceList)
-                AddEntry(zip, paths[invoice.CashMovementId], invoice.Content);
+            AddEntry(zip, excelName, ToExcel(sales, purchaseInvoices, paidInvoices, paths));
+            foreach (var file in fileList)
+                AddEntry(zip, paths[file.PurchaseInvoiceId!.Value], file.Content);
         }
         return stream.ToArray();
     }
@@ -276,59 +378,140 @@ public static class SalesExport
     }
 
     /// <summary>
-    /// Hoja con un reembolso por fila. Sale siempre, aunque no haya reembolsos, para que el
-    /// libro tenga siempre la misma forma. El total no cuenta los anulados.
+    /// Hoja "Facturas proveedores": una fila por factura con sus totales y, debajo y agrupadas, sus
+    /// líneas. Sale siempre, aunque no haya facturas, para que el libro tenga siempre la misma forma.
+    /// El total no cuenta las anuladas.
     /// </summary>
-    private static void AddRefundsSheet(XLWorkbook book, List<CashMovement> refunds, IReadOnlyDictionary<int, string>? invoicePaths)
+    private static void AddPurchaseInvoicesSheet(XLWorkbook book, List<PurchaseInvoice> invoices,
+        IReadOnlyDictionary<int, string>? filePaths)
     {
-        var sheet = book.Worksheets.Add("Reembolsos");
+        var sheet = book.Worksheets.Add("Facturas proveedores");
 
         string[] headers =
-            ["ID", "Fecha", "Hora", "Pagado desde", "Persona", "Concepto", "Nº factura", "Factura adjunta", "Notas", "Anulado", "Importe"];
+        [
+            "ID", "Fecha", "Proveedor", "NIF", "Nº factura", "Concepto", "Cantidad", "Precio unidad",
+            "IVA", TaxBaseHeader, TaxAmountHeader, "Total", "Pagada", "Fecha de pago", "Forma de pago",
+            "Archivo", "Notas", "Anulada",
+        ];
+        int Col(string header) => Array.IndexOf(headers, header) + 1;
         for (var column = 0; column < headers.Length; column++)
             sheet.Cell(1, column + 1).Value = headers[column];
 
         var row = 2;
-        foreach (var refund in refunds.OrderBy(r => r.Date))
+        foreach (var invoice in invoices.OrderBy(i => i.InvoiceDate).ThenBy(i => i.Id))
         {
-            XLCellValue[] values =
-            [
-                refund.Id,
-                refund.Date.Date,
-                refund.Date.ToString("HH:mm"),
-                RefundOrigin(refund),
-                refund.Person ?? "",
-                refund.Description,
-                refund.InvoiceNumber ?? "",
-                refund.InvoiceFileName ?? "No",
-                refund.Notes ?? "",
-                YesNo(refund.Canceled),
-                refund.Amount,
-            ];
-            for (var column = 0; column < values.Length; column++)
-                sheet.Cell(row, column + 1).Value = values[column];
+            var invoiceRow = sheet.Row(row);
+            sheet.Cell(row, Col("ID")).Value = invoice.Id;
+            sheet.Cell(row, Col("Fecha")).Value = invoice.InvoiceDate;
+            sheet.Cell(row, Col("Proveedor")).Value = invoice.Provider?.LegalName ?? "";
+            sheet.Cell(row, Col("NIF")).Value = invoice.Provider?.Nif ?? "";
+            sheet.Cell(row, Col("Nº factura")).Value = invoice.Number;
+            sheet.Cell(row, Col("Concepto")).Value = invoice.Summary;
+            sheet.Cell(row, Col("Cantidad")).Value = invoice.Lines.Sum(l => l.Quantity);
+            sheet.Cell(row, Col("IVA")).Value = string.Join(" + ", invoice.TaxBreakdown().Select(i => i.TaxRate.Name));
+            sheet.Cell(row, Col(TaxBaseHeader)).Value = invoice.BaseAmount;
+            sheet.Cell(row, Col(TaxAmountHeader)).Value = invoice.TaxAmount;
+            sheet.Cell(row, Col("Total")).Value = invoice.Amount;
+            sheet.Cell(row, Col("Pagada")).Value = YesNo(invoice.IsPaid);
+            sheet.Cell(row, Col("Fecha de pago")).Value = invoice.PaymentDate is { } paid ? paid : Blank.Value;
+            sheet.Cell(row, Col("Forma de pago")).Value = PaymentMethods.Describe(invoice.PaymentMethod, invoice.PaymentSalesPoint);
+            sheet.Cell(row, Col("Archivo")).Value = invoice.InvoiceFileName;
+            sheet.Cell(row, Col("Notas")).Value = invoice.Notes ?? "";
+            sheet.Cell(row, Col("Anulada")).Value = YesNo(invoice.Canceled);
 
-            if (invoicePaths is not null && invoicePaths.TryGetValue(refund.Id, out var path))
+            if (filePaths is not null && filePaths.TryGetValue(invoice.Id, out var path))
             {
-                var link = sheet.Cell(row, Array.IndexOf(headers, "Factura adjunta") + 1);
+                var link = sheet.Cell(row, Col("Archivo"));
                 link.SetHyperlink(new XLHyperlink(new Uri(path, UriKind.Relative)));
                 link.Style.Font.FontColor = XLColor.Blue;
                 link.Style.Font.Underline = XLFontUnderlineValues.Single;
             }
+            invoiceRow.Style.Font.Bold = true;
+            invoiceRow.Style.Fill.BackgroundColor = XLColor.FromHtml("#EEF2F7");
+            row++;
 
-            if (refund.Canceled)
-                sheet.Row(row).Style.Font.FontColor = XLColor.Gray;
+            // Las líneas no llevan cuota ni total: el IVA se calcula por tipo sobre la suma de las bases.
+            var firstLineRow = row;
+            foreach (var line in invoice.Lines)
+            {
+                sheet.Cell(row, Col("Concepto")).Value = line.IsFree ? line.Description : $"{line.Description} (inventario)";
+                sheet.Cell(row, Col("Cantidad")).Value = line.Quantity;
+                sheet.Cell(row, Col("Precio unidad")).Value = line.UnitPrice;
+                sheet.Cell(row, Col("IVA")).Value = line.TaxRate.Name;
+                sheet.Cell(row, Col(TaxBaseHeader)).Value = line.BaseAmount;
+                row++;
+            }
+            if (row > firstLineRow)
+                sheet.Rows(firstLineRow, row - 1).Group();
+
+            if (invoice.Canceled)
+                sheet.Rows(invoiceRow.RowNumber(), row - 1).Style.Font.FontColor = XLColor.Gray;
+        }
+
+        // Las filas de las líneas tienen "Anulada" vacía, así que no se suman.
+        var canceled = sheet.Column(Col("Anulada")).ColumnLetter();
+        sheet.Cell(row, Col(TaxBaseHeader) - 1).Value = "Total";
+        foreach (var header in new[] { TaxBaseHeader, TaxAmountHeader, "Total" })
+        {
+            var letter = sheet.Column(Col(header)).ColumnLetter();
+            sheet.Cell(row, Col(header)).FormulaA1 =
+                $"SUMIFS({letter}2:{letter}{row - 1},{canceled}2:{canceled}{row - 1},\"{YesNo(false)}\")";
+        }
+        sheet.Row(row).Style.Font.Bold = true;
+
+        foreach (var header in new[] { "Fecha", "Fecha de pago" })
+            sheet.Column(Col(header)).Style.NumberFormat.Format = "dd/mm/yyyy";
+        foreach (var header in new[] { "Precio unidad", TaxBaseHeader, TaxAmountHeader, "Total" })
+            sheet.Column(Col(header)).Style.NumberFormat.Format = EurosFormat;
+        sheet.Outline.SummaryVLocation = XLOutlineSummaryVLocation.Top;
+        sheet.Row(1).Style.Font.Bold = true;
+        sheet.SheetView.FreezeRows(1);
+        sheet.Columns().AdjustToContents();
+    }
+
+    /// <summary>
+    /// Hoja "IVA soportado": base, cuota y total de las facturas de proveedores por tipo de IVA,
+    /// sumando el desglose de cada factura. No cuenta las anuladas. Sale siempre, aunque no haya facturas.
+    /// </summary>
+    private static void AddPurchaseTaxSheet(XLWorkbook book, List<PurchaseInvoice> invoices)
+    {
+        var sheet = book.Worksheets.Add("IVA soportado");
+
+        string[] headers = ["IVA", "Facturas", TaxBaseHeader, TaxAmountHeader, "Total"];
+        for (var column = 0; column < headers.Length; column++)
+            sheet.Cell(1, column + 1).Value = headers[column];
+
+        var groups = invoices
+            .Where(i => !i.Canceled)
+            .SelectMany(i => i.TaxBreakdown())
+            .GroupBy(item => item.TaxRate)
+            .OrderByDescending(g => g.Key.Value);
+
+        var row = 2;
+        foreach (var group in groups)
+        {
+            XLCellValue[] values =
+            [
+                group.Key.Name,
+                group.Count(),
+                group.Sum(i => i.BaseAmount),
+                group.Sum(i => i.TaxAmount),
+                group.Sum(i => i.Total),
+            ];
+            for (var column = 0; column < values.Length; column++)
+                sheet.Cell(row, column + 1).Value = values[column];
             row++;
         }
 
-        var amount = sheet.Column(headers.Length).ColumnLetter();
-        var canceled = sheet.Column(Array.IndexOf(headers, "Anulado") + 1).ColumnLetter();
-        sheet.Cell(row, headers.Length - 1).Value = "Total";
-        sheet.Cell(row, amount).FormulaA1 = $"SUMIFS({amount}2:{amount}{row - 1},{canceled}2:{canceled}{row - 1},\"{YesNo(false)}\")";
+        sheet.Cell(row, 2).Value = "Total";
+        foreach (var column in new[] { 3, 4, 5 })
+        {
+            var letter = sheet.Column(column).ColumnLetter();
+            sheet.Cell(row, column).FormulaA1 = $"SUM({letter}2:{letter}{row - 1})";
+            sheet.Column(column).Style.NumberFormat.Format = EurosFormat;
+        }
         sheet.Row(row).Style.Font.Bold = true;
 
-        sheet.Column(2).Style.NumberFormat.Format = "dd/mm/yyyy";
-        sheet.Column(headers.Length).Style.NumberFormat.Format = EurosFormat;
         sheet.Row(1).Style.Font.Bold = true;
         sheet.SheetView.FreezeRows(1);
         sheet.Columns().AdjustToContents();
@@ -347,12 +530,6 @@ public static class SalesExport
         discounts.AddRange(SaleTypes.Adjustments(sale));
         return string.Join(" + ", discounts);
     }
-
-    /// <summary>De dónde sale el dinero de un reembolso: "Caja de Taquilla", "Caja de Tienda" o "Transferencia".</summary>
-    public static string RefundOrigin(CashMovement refund) =>
-        refund.SalesPoint is { } salesPoint
-            ? $"Caja de {ActiveProfile.Name(salesPoint)}"
-            : PaymentMethods.Name(refund.PaymentMethod);
 
     /// <summary>Resumen de lo vendido, por ejemplo "2 x Entrada general, 1 x Sidra".</summary>
     public static string Products(Sale sale) =>

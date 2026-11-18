@@ -24,6 +24,20 @@ public static class ClientSettingsLoader
     /// </summary>
     public const string ClientVariable = "QUICKINVENTORY_CLIENT";
 
+    /// <summary>
+    /// Solo en Debug: id del client elegido con <see cref="ClientVariable"/>, o null para usar el compilado.
+    /// En Release siempre es null.
+    /// </summary>
+    public static string? DebugClientId()
+    {
+#if DEBUG
+        var id = Environment.GetEnvironmentVariable(ClientVariable)?.Trim();
+        return string.IsNullOrEmpty(id) ? null : id;
+#else
+        return null;
+#endif
+    }
+
     /// <exception cref="BusinessRuleException">Si el archivo falta o tiene algún dato mal.</exception>
     public static ClientSettings Load()
     {
@@ -65,8 +79,7 @@ public static class ClientSettingsLoader
 #if DEBUG
         // En Debug van dentro todos los clients: el compilado como "client.json" y los demás como
         // "clients/<id>/client.json" (ver el .csproj).
-        var id = Environment.GetEnvironmentVariable(ClientVariable)?.Trim();
-        if (!string.IsNullOrEmpty(id))
+        if (DebugClientId() is { } id)
         {
             var assembly = typeof(ClientSettingsLoader).Assembly;
             var clients = assembly.GetManifestResourceNames()

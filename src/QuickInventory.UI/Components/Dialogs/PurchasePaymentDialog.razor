@@ -1,0 +1,61 @@
+@* Marcar como pagada una factura de proveedor que se apuntó como pendiente. *@
+@inject IPurchaseInvoiceService PurchaseInvoiceService
+@inject ISnackbar Warnings
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudText Class="mb-4">
+                Factura <b>@Invoice.Number</b> de <b>@Invoice.Provider?.LegalName</b>: <b>@Invoice.Amount.ToString("C")</b>
+            </MudText>
+            <PaymentFields @bind-Date="date" @bind-Method="method" @bind-SalesPoint="salesPoint" ShowErrors="triedToSave" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Size="Size.Large" OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary" Disabled="saving" OnClick="Save">
+            Marcar como pagada
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public PurchaseInvoice Invoice { get; set; } = default!;
+
+    private DateTime? date = DateTime.Today;
+    private PaymentMethod? method;
+    private SalesPoint? salesPoint;
+    private bool triedToSave;
+    private bool saving;
+    private MudForm form = default!;
+
+    private async Task Save()
+    {
+        triedToSave = true;
+        await form.ValidateAsync();
+        if (!form.IsValid || date is null || method is null) return;
+
+        saving = true;
+        try
+        {
+            await PurchaseInvoiceService.SetPaymentAsync(Invoice.Id, date, method, salesPoint);
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el cambio. Inténtalo de nuevo.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Cancel() => Dialog.Cancel();
+}

@@ -17,7 +17,7 @@ namespace QuickInventory.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.14")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -89,7 +89,7 @@ namespace QuickInventory.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("CashMovementId")
+                    b.Property<int?>("CashMovementId")
                         .HasColumnType("integer");
 
                     b.Property<byte[]>("Content")
@@ -106,12 +106,21 @@ namespace QuickInventory.Data.Migrations
                         .HasMaxLength(260)
                         .HasColumnType("character varying(260)");
 
+                    b.Property<int?>("PurchaseInvoiceId")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CashMovementId")
                         .IsUnique();
 
-                    b.ToTable("InvoiceFiles");
+                    b.HasIndex("PurchaseInvoiceId")
+                        .IsUnique();
+
+                    b.ToTable("InvoiceFiles", t =>
+                        {
+                            t.HasCheckConstraint("CK_InvoiceFiles_UnSoloDueno", "num_nonnulls(\"CashMovementId\", \"PurchaseInvoiceId\") = 1");
+                        });
                 });
 
             modelBuilder.Entity("QuickInventory.Core.Models.InvoiceSeries", b =>
@@ -246,6 +255,152 @@ namespace QuickInventory.Data.Migrations
                     b.UseTphMappingStrategy();
                 });
 
+            modelBuilder.Entity("QuickInventory.Core.Models.Provider", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
+                    b.Property<string>("LegalName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Nif")
+                        .IsRequired()
+                        .HasMaxLength(9)
+                        .HasColumnType("character varying(9)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Nif")
+                        .IsUnique();
+
+                    b.ToTable("Providers");
+                });
+
+            modelBuilder.Entity("QuickInventory.Core.Models.PurchaseInvoice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("BaseAmount")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("Canceled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("InvoiceDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("InvoiceFileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("PaymentDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PaymentSalesPoint")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ProviderId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("RegistrationDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<long>("TaxAmount")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceDate");
+
+                    b.HasIndex("ProviderId", "Number")
+                        .IsUnique()
+                        .HasFilter("\"Canceled\" = false");
+
+                    b.ToTable("PurchaseInvoices");
+                });
+
+            modelBuilder.Entity("QuickInventory.Core.Models.PurchaseInvoiceLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PurchaseInvoiceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TaxRate")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("UnitPrice")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("PurchaseInvoiceId");
+
+                    b.ToTable("PurchaseInvoiceLines");
+                });
+
             modelBuilder.Entity("QuickInventory.Core.Models.Sale", b =>
                 {
                     b.Property<int>("Id")
@@ -378,6 +533,9 @@ namespace QuickInventory.Data.Migrations
                     b.Property<int>("ProductId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("PurchaseInvoiceId")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("SaleId")
                         .HasColumnType("integer");
 
@@ -390,6 +548,8 @@ namespace QuickInventory.Data.Migrations
                     b.HasIndex("Date");
 
                     b.HasIndex("ProductId");
+
+                    b.HasIndex("PurchaseInvoiceId");
 
                     b.HasIndex("SaleId");
 
@@ -453,8 +613,39 @@ namespace QuickInventory.Data.Migrations
                     b.HasOne("QuickInventory.Core.Models.CashMovement", null)
                         .WithOne()
                         .HasForeignKey("QuickInventory.Core.Models.InvoiceFile", "CashMovementId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("QuickInventory.Core.Models.PurchaseInvoice", null)
+                        .WithOne()
+                        .HasForeignKey("QuickInventory.Core.Models.InvoiceFile", "PurchaseInvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("QuickInventory.Core.Models.PurchaseInvoice", b =>
+                {
+                    b.HasOne("QuickInventory.Core.Models.Provider", "Provider")
+                        .WithMany()
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Provider");
+                });
+
+            modelBuilder.Entity("QuickInventory.Core.Models.PurchaseInvoiceLine", b =>
+                {
+                    b.HasOne("QuickInventory.Core.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("QuickInventory.Core.Models.PurchaseInvoice", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("PurchaseInvoiceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("QuickInventory.Core.Models.Sale", b =>
@@ -489,6 +680,10 @@ namespace QuickInventory.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("QuickInventory.Core.Models.PurchaseInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("PurchaseInvoiceId");
+
                     b.HasOne("QuickInventory.Core.Models.Sale", "Sale")
                         .WithMany()
                         .HasForeignKey("SaleId");
@@ -496,6 +691,11 @@ namespace QuickInventory.Data.Migrations
                     b.Navigation("Product");
 
                     b.Navigation("Sale");
+                });
+
+            modelBuilder.Entity("QuickInventory.Core.Models.PurchaseInvoice", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("QuickInventory.Core.Models.Sale", b =>
