@@ -14,6 +14,15 @@ public static class PaymentMethods
         _ => paymentMethod.ToString()
     };
 
+    /// <summary>
+    /// Cómo se pagó algo que puede salir de una caja (una factura de proveedor): "Caja de Tienda",
+    /// "Tarjeta"... o vacío si no está pagado.
+    /// </summary>
+    public static string Describe(PaymentMethod? method, SalesPoint? salesPoint) =>
+        salesPoint is { } sp ? $"Caja de {ActiveProfile.Name(sp)}"
+        : method is { } m ? Name(m)
+        : "";
+
     public static string Icon(PaymentMethod paymentMethod) => paymentMethod switch
     {
         PaymentMethod.Cash => Icons.Material.Filled.Payments,

@@ -1,0 +1,299 @@
+@page "/purchase-invoices"
+@inject IPurchaseInvoiceService PurchaseInvoiceService
+@inject IDialogService Dialogs
+@inject IFileSaver FileSaver
+@inject ISnackbar Warnings
+@inject NavigationManager Navigation
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    <h1 class="page-title mb-0">Facturas de proveedores</h1>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.LocalShipping" OnClick="@(() => Navigation.NavigateTo("/providers"))">
+        Proveedores
+    </MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="Add">
+        Nueva factura
+    </MudButton>
+</div>
+
+<MudText Class="mb-4">
+    Facturas que nos mandan los proveedores. Cada una se guarda con el archivo escaneado o la foto.
+</MudText>
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    @* Selector de mes (por la fecha de la factura): flechas grandes en vez de un calendario. *@
+    @if (!unpaidOnly)
+    {
+        <div class="d-flex align-center gap-2">
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Variant="Variant.Outlined" Size="Size.Large"
+                           OnClick="() => ChangeMonth(-1)" aria-label="Mes anterior" />
+            <MudText Typo="Typo.h6" Class="export-month">@month.ToString("MMMM 'de' yyyy")</MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Variant="Variant.Outlined" Size="Size.Large"
+                           OnClick="() => ChangeMonth(1)" Disabled="@IsCurrentMonth" aria-label="Mes siguiente" />
+        </div>
+    }
+    <MudSwitch T="bool" Value="unpaidOnly" ValueChanged="ToggleUnpaid" Color="Color.Warning"
+               Label="Solo pendientes de pago (de cualquier mes)" />
+</div>
+
+@if (invoices is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudTable T="PurchaseInvoice" Items="invoices" Hover="true" Striped="true" Dense="true" Elevation="1" RowsPerPage="25"
+              Breakpoint="Breakpoint.Sm"
+              RowClassFunc="@((invoice, _) => invoice.Canceled ? "sale-canceled-row" : "")">
+        <HeaderContent>
+            <MudTh>
+                <MudTableSortLabel T="PurchaseInvoice" SortBy="i => i.InvoiceDate" InitialDirection="SortDirection.Descending">Fecha</MudTableSortLabel>
+            </MudTh>
+            <MudTh><MudTableSortLabel T="PurchaseInvoice" SortBy="i => i.Provider!.LegalName">Proveedor</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel T="PurchaseInvoice" SortBy="i => i.Number">Factura</MudTableSortLabel></MudTh>
+            <MudTh Style="text-align:right">
+                <MudTableSortLabel T="PurchaseInvoice" SortBy="i => i.Amount">Importe</MudTableSortLabel>
+            </MudTh>
+            <MudTh><MudTableSortLabel T="PurchaseInvoice" SortBy="i => i.PaymentDate ?? DateTime.MaxValue">Pago</MudTableSortLabel></MudTh>
+            <MudTh>Archivo</MudTh>
+            <MudTh />
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Fecha" Style="white-space:nowrap">@context.InvoiceDate.ToString("dd/MM/yyyy")</MudTd>
+            <MudTd DataLabel="Proveedor">
+                <span class="product-name">@context.Provider?.LegalName</span>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Provider?.Nif</MudText>
+            </MudTd>
+            <MudTd DataLabel="Factura">
+                <div>
+                    Nº @context.Number
+                    @if (context.Canceled)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-2">Anulada</MudChip>
+                    }
+                </div>
+                <MudText Typo="Typo.body2">@context.Summary</MudText>
+                @if (context.Notes is not null)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Notes</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Importe" Style="text-align:right;white-space:nowrap">
+                <div class="product-name">@context.Amount.ToString("C")</div>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Base @context.BaseAmount.ToString("C") + IVA @context.TaxAmount.ToString("C")
+                </MudText>
+            </MudTd>
+            <MudTd DataLabel="Pago">
+                @if (context.IsPaid && context.Canceled)
+                {
+                    <MudChip T="string" Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Variant="Variant.Outlined" Class="ml-0">
+                        @PaymentText(context)
+                    </MudChip>
+                }
+                else if (context.IsPaid)
+                {
+                    @* La X la vuelve a dejar pendiente (por si se marcó por error). *@
+                    <MudChip T="string" Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success"
+                             Variant="Variant.Outlined" Class="ml-0" OnClose="() => MarkUnpaid(context)">
+                        @PaymentText(context)
+                    </MudChip>
+                }
+                else if (!context.Canceled)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Schedule" OnClick="() => MarkPaid(context)">
+                        Pendiente: marcar pagada
+                    </MudButton>
+                }
+            </MudTd>
+            <MudTd DataLabel="Archivo">
+                <MudTooltip Text="Guardar una copia de la factura">
+                    <MudChip T="string" Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" Color="Color.Primary"
+                             Variant="Variant.Outlined" Class="ml-0" OnClick="() => SaveFile(context)">
+                        @context.InvoiceFileName
+                    </MudChip>
+                </MudTooltip>
+            </MudTd>
+            <MudTd Style="text-align:right">
+                @if (!context.Canceled)
+                {
+                    <MudTooltip Text="Anular">
+                        <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" Size="Size.Small"
+                                       OnClick="() => Cancel(context)" aria-label="Anular" />
+                    </MudTooltip>
+                }
+            </MudTd>
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <MudText Class="pa-4">@(unpaidOnly ? "No hay facturas pendientes de pago." : "No hay facturas de este mes.")</MudText>
+        </NoRecordsContent>
+
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Filas por página:"
+                           InfoFormat="{first_item}-{last_item} de {all_items}" />
+        </PagerContent>
+    </MudTable>
+
+    var valid = invoices.Where(i => !i.Canceled).ToList();
+    <MudPaper Class="pa-4 mt-4" Outlined="true">
+        <MudText Typo="Typo.h6">
+            @(unpaidOnly ? "Total pendiente de pago" : "Total del mes"): <b>@valid.Sum(i => i.Amount).ToString("C")</b>
+        </MudText>
+        <MudText>
+            Base imponible @valid.Sum(i => i.BaseAmount).ToString("C") · IVA @valid.Sum(i => i.TaxAmount).ToString("C")
+            @if (!unpaidOnly && valid.Any(i => !i.IsPaid))
+            {
+                <span> · Pendiente de pago: <b>@valid.Where(i => !i.IsPaid).Sum(i => i.Amount).ToString("C")</b></span>
+            }
+        </MudText>
+    </MudPaper>
+}
+
+@code {
+    /// <summary>Primer día del mes que se está viendo.</summary>
+    private DateTime month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+
+    private List<PurchaseInvoice>? invoices;
+    private bool unpaidOnly;
+
+    private bool IsCurrentMonth => month.AddMonths(1) > DateTime.Today;
+
+    private static readonly DialogOptions CustomDialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+    };
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task ChangeMonth(int months)
+    {
+        month = month.AddMonths(months);
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        try
+        {
+            invoices = unpaidOnly
+                ? await PurchaseInvoiceService.GetUnpaidInvoicesAsync()
+                : await PurchaseInvoiceService.GetInvoicesAsync(month, month.AddMonths(1));
+        }
+        catch (Exception)
+        {
+            invoices = [];
+            Warnings.Add("No se han podido cargar las facturas. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    private async Task Add()
+    {
+        var parameters = new DialogParameters<PurchaseInvoiceDialog> { { x => x.Invoice, new PurchaseInvoice() } };
+        // Más ancho que los demás: lleva la tabla de líneas.
+        var options = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true };
+        var dialog = await Dialogs.ShowAsync<PurchaseInvoiceDialog>("Nueva factura de proveedor", parameters, options);
+        var result = await dialog.Result;
+        if (result is not { Canceled: false, Data: PurchaseInvoice saved }) return;
+
+        Warnings.Add($"Factura {saved.Number} de {saved.Provider?.LegalName} guardada.", Severity.Success);
+
+        // Se va al mes de la factura para verla en la lista.
+        if (!unpaidOnly) month = new(saved.InvoiceDate.Year, saved.InvoiceDate.Month, 1);
+        await Load();
+    }
+
+    private static string PaymentText(PurchaseInvoice invoice) =>
+        $"{invoice.PaymentDate:dd/MM/yyyy} · {PaymentMethods.Describe(invoice.PaymentMethod, invoice.PaymentSalesPoint)}";
+
+    private async Task ToggleUnpaid(bool value)
+    {
+        unpaidOnly = value;
+        await Load();
+    }
+
+    private async Task MarkPaid(PurchaseInvoice invoice)
+    {
+        var parameters = new DialogParameters<PurchasePaymentDialog> { { x => x.Invoice, invoice } };
+        var dialog = await Dialogs.ShowAsync<PurchasePaymentDialog>("Marcar como pagada", parameters, CustomDialogOptions);
+        var result = await dialog.Result;
+        if (result is not { Canceled: false }) return;
+
+        Warnings.Add($"Factura {invoice.Number} marcada como pagada.", Severity.Success);
+        await Load();
+    }
+
+    private async Task MarkUnpaid(PurchaseInvoice invoice)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Marcar como pendiente",
+            $"¿Seguro que la factura {invoice.Number} de {invoice.Provider?.LegalName} no está pagada?",
+            yesText: "Marcar como pendiente",
+            cancelText: "Cancelar");
+        if (confirmed != true) return;
+
+        try
+        {
+            await PurchaseInvoiceService.SetPaymentAsync(invoice.Id, null, null, null);
+            Warnings.Add($"Factura {invoice.Number} pendiente de pago.", Severity.Success);
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el cambio. Inténtalo de nuevo.", Severity.Error);
+        }
+        await Load();
+    }
+
+    private async Task Cancel(PurchaseInvoice invoice)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Anular factura",
+            $"¿Seguro que quieres anular la factura {invoice.Number} de {invoice.Provider?.LegalName}? Se conserva en el historial.",
+            yesText: "Anular",
+            cancelText: "Cancelar");
+        if (confirmed != true) return;
+
+        try
+        {
+            await PurchaseInvoiceService.CancelInvoiceAsync(invoice.Id);
+            Warnings.Add("Factura anulada.", Severity.Success);
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el cambio. Inténtalo de nuevo.", Severity.Error);
+        }
+        await Load();
+    }
+
+    private async Task SaveFile(PurchaseInvoice invoice)
+    {
+        try
+        {
+            var file = await PurchaseInvoiceService.GetInvoiceFileAsync(invoice.Id);
+            if (file is null)
+            {
+                Warnings.Add("No se encuentra el archivo de esta factura.", Severity.Warning);
+                return;
+            }
+            if (await FileSaver.SaveAsync(file.FileName, file.Content))
+                Warnings.Add($"Factura guardada: {file.FileName}", Severity.Success);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar la factura. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+}

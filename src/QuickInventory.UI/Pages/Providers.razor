@@ -1,0 +1,182 @@
+@page "/providers"
+@inject IProviderService ProviderService
+@inject IDialogService Dialogs
+@inject ISnackbar Warnings
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    <h1 class="page-title mb-0">Proveedores</h1>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="NewProvider">
+        Nuevo proveedor
+    </MudButton>
+</div>
+
+@if (providers is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Class="pa-4 mb-4 d-flex flex-wrap align-center gap-4" Elevation="0" Outlined="true">
+        <MudTextField T="string" @bind-Value="searching" Placeholder="Buscar por nombre o NIF"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true"
+                      AutoFocus="true" Variant="Variant.Outlined" Class="finder" />
+        <MudSwitch T="bool" Value="showInactive" ValueChanged="ToggleInactive" Color="Color.Primary"
+                   Label="Ver también los desactivados" />
+    </MudPaper>
+
+    <MudTable T="Provider" Items="providers" Filter="new Func<Provider, bool>(Filter)" Hover="true" Striped="true"
+              Elevation="1" RowsPerPage="25" Breakpoint="Breakpoint.Sm"
+              RowClassFunc="@((p, _) => p.Active ? "" : "sale-canceled-row")">
+        <HeaderContent>
+            <MudTh><MudTableSortLabel T="Provider" SortBy="p => p.LegalName" InitialDirection="SortDirection.Ascending">Proveedor</MudTableSortLabel></MudTh>
+            <MudTh>NIF</MudTh>
+            <MudTh>Contacto</MudTh>
+            <MudTh Style="text-align:right">Acciones</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Proveedor">
+                <span class="product-name">@context.LegalName</span>
+                @if (!context.Active)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Class="ml-2">Desactivado</MudChip>
+                }
+                @if (context.Address is not null)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Address</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="NIF">@context.Nif</MudTd>
+            <MudTd DataLabel="Contacto">
+                @if (context.PhoneNumber is not null)
+                {
+                    <div>@context.PhoneNumber</div>
+                }
+                @if (context.Email is not null)
+                {
+                    <div>@context.Email</div>
+                }
+                @if (context.Notes is not null)
+                {
+                    <MudText Typo="Typo.body2">@context.Notes</MudText>
+                }
+            </MudTd>
+            <MudTd Style="text-align:right; white-space:nowrap">
+                <MudTooltip Text="Editar">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" OnClick="() => Edit(context)" aria-label="Editar" />
+                </MudTooltip>
+                @if (context.Active)
+                {
+                    <MudTooltip Text="Desactivar (deja de salir al apuntar facturas)">
+                        <MudIconButton Icon="@Icons.Material.Filled.Block" Color="Color.Error"
+                                       OnClick="() => SetActive(context, false)" aria-label="Desactivar" />
+                    </MudTooltip>
+                }
+                else
+                {
+                    <MudTooltip Text="Volver a activar">
+                        <MudIconButton Icon="@Icons.Material.Filled.Restore" Color="Color.Primary"
+                                       OnClick="() => SetActive(context, true)" aria-label="Activar" />
+                    </MudTooltip>
+                }
+            </MudTd>
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <MudText Class="pa-4">Todavía no hay ningún proveedor.</MudText>
+        </NoRecordsContent>
+
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Filas por página:"
+                           InfoFormat="{first_item}-{last_item} de {all_items}" />
+        </PagerContent>
+    </MudTable>
+}
+
+@code {
+    private List<Provider>? providers;
+    private string? searching;
+    private bool showInactive;
+
+    private static readonly DialogOptions CustomDialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+    };
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        try
+        {
+            providers = await ProviderService.GetProvidersAsync(includeInactive: showInactive);
+        }
+        catch (Exception)
+        {
+            providers = [];
+            Warnings.Add("No se han podido cargar los proveedores. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    private async Task ToggleInactive(bool value)
+    {
+        showInactive = value;
+        await Load();
+    }
+
+    // Sin distinguir mayúsculas ni tildes; el NIF se busca sin espacios ni guiones.
+    private bool Filter(Provider p)
+    {
+        if (string.IsNullOrWhiteSpace(searching)) return true;
+
+        var text = searching.Trim();
+        var nif = TaxId.Normalize(text);
+        return CultureInfo.CurrentCulture.CompareInfo.IndexOf(p.LegalName, text, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0
+            || (nif.Length > 0 && p.Nif.Contains(nif));
+    }
+
+    private Task NewProvider() => OpenEditor(new Provider(), "Nuevo proveedor");
+
+    // Se edita una copia: si el usuario cancela, la tabla no cambia.
+    private Task Edit(Provider p) => OpenEditor(p.Clone(), "Editar proveedor");
+
+    // El diálogo guarda él mismo; aquí solo se recarga la lista.
+    private async Task OpenEditor(Provider provider, string title)
+    {
+        var parameters = new DialogParameters<ProviderDialog> { { x => x.Provider, provider } };
+        var dialog = await Dialogs.ShowAsync<ProviderDialog>(title, parameters, CustomDialogOptions);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await Load();
+    }
+
+    private async Task SetActive(Provider provider, bool active)
+    {
+        if (!active)
+        {
+            var confirmed = await Dialogs.ShowMessageBoxAsync(
+                "Desactivar proveedor",
+                $"¿Seguro que quieres desactivar a {provider.LegalName}? Ya no saldrá al apuntar facturas, pero se conservan las que ya tiene.",
+                yesText: "Desactivar",
+                cancelText: "Cancelar");
+            if (confirmed != true) return;
+        }
+
+        try
+        {
+            await ProviderService.SetProviderActiveAsync(provider.Id, active);
+            Warnings.Add(active ? $"{provider.LegalName} activado." : $"{provider.LegalName} desactivado.", Severity.Success);
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el cambio. Inténtalo de nuevo.", Severity.Error);
+        }
+        await Load();
+    }
+}

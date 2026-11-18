@@ -5,7 +5,11 @@ public enum StockMovementType
     Input,
     Output,
     Sale,
-    Cancelation
+    Cancelation,
+    /// <summary>Artículos que llegan con una factura de proveedor.</summary>
+    Purchase,
+    /// <summary>Anulación de una factura de proveedor: se restan las unidades que sumó.</summary>
+    PurchaseCancelation
 }
 
 /// <summary>
@@ -27,4 +31,7 @@ public class StockMovement
     /// <summary>Sale que originó el movimiento, si la hay.</summary>
     public int? SaleId { get; set; }
     public Sale? Sale { get; set; }
+
+    /// <summary>Factura de proveedor que originó el movimiento, si la hay.</summary>
+    public int? PurchaseInvoiceId { get; set; }
 }

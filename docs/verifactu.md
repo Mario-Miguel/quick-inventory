@@ -294,7 +294,7 @@ Si en el futuro se quisiera admitir el modo «No VERI\*FACTU», habría que aña
 | Tests | No hay proyecto de tests. | Imprescindibles para la huella, el XML y los cálculos de IVA. |
 | Fecha y hora | `DateTime.Now` sin huso. | `DateTimeOffset` con huso de Europe/Madrid para `FechaHoraHusoGenRegistro`. |
 
-Cosas que **no** cambian: cierre de caja, reembolsos (son compras, no facturas emitidas), inventario y stock.
+Cosas que **no** cambian: cierre de caja, facturas de proveedores (son compras, no facturas emitidas), inventario y stock.
 
 ---
 
@@ -547,7 +547,7 @@ migraciones y `dotnet test` se ejecuta.
 3. **Cálculo del desglose**: agrupar las líneas por tipo. Base = total con IVA / (1 + tipo/100) y
    cuota = total − base, redondeando a céntimos **por tipo**, no por línea, y comprobando que base + cuota = total
    exacto. Tests con casos de redondeo.
-4. **Generación del registro** en la misma transacción que la venta (transacción explícita, como en `RefundService`):
+4. **Generación del registro** en la misma transacción que la venta (transacción explícita, como en `PurchaseInvoiceService.RegisterInvoiceAsync`):
    - Tomar el bloqueo de la cadena (`pg_advisory_xact_lock`).
    - Leer el último `VerifactuRecord`.
    - Construir el alta con la librería.
