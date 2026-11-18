@@ -225,15 +225,13 @@ Los importes se guardan en **céntimos enteros** para evitar errores de redondeo
 
 1. **Sales (TPV)**: rejilla de botones con los productos más vendidos, carrito, cobro en efectivo o tarjeta, cálculo del cambio y descuento automático del stock (`StockMovementType.Sale`).
 2. **Cierre de caja diario**: totales por método de pago y exportación a PDF/Excel.
-3. **Ingresos y Pagos**: formularios simples sobre `CashMovement`, con categorías.
-4. **Historial de movimientos** de cada product en el inventario.
-5. **Copias de seguridad** de la base en la nube con retención larga (ver `docs/verifactu.md`).
-6. **Instalador**: `dotnet publish -c Release -r win-x64 --self-contained` e Inno Setup o MSIX.
-7. **Facturas emitidas (Admin)**: apartado para generar facturas a clientes, por ejemplo a colegios que hacen visitas guiadas.
-8. **Proveedores y facturas de compra (Admin)**: alta de proveedores habituales y registro de las facturas que nos emiten. Cada factura lleva al menos el proveedor (nombre), el número de factura y un archivo adjunto con la factura.
-9. **Integración con Groupon**: conectarse a Groupon para obtener las facturas de las compras hechas desde allí.
-10. **Albaranes**: poder registrar albaranes, sobre todo al añadir stock en el inventario (la entrada de mercancía queda asociada a su albarán).
-11. **Validar entradas con QR**: escanear el QR de las entradas compradas en Groupon o en la tienda online para comprobarlas en taquilla (que existen, son del día y no se han usado ya).
+3. **Historial de movimientos** de cada product en el inventario.
+4. **Copias de seguridad** de la base en la nube con retención larga (ver `docs/verifactu.md`).
+5. **Instalador**: `dotnet publish -c Release -r win-x64 --self-contained` e Inno Setup o MSIX.
+6. **Proveedores y facturas de compra (Admin)**: alta de proveedores habituales y registro de las facturas que nos emiten. Cada factura lleva al menos el proveedor (nombre), el número de factura y un archivo adjunto con la factura.
+7. **Integración con Groupon**: conectarse a Groupon para obtener las facturas de las compras hechas desde allí.
+8. **Albaranes**: poder registrar albaranes, sobre todo al añadir stock en el inventario (la entrada de mercancía queda asociada a su albarán).
+9. **Validar entradas con QR**: escanear el QR de las entradas compradas en Groupon o en la tienda online para comprobarlas en taquilla (que existen, son del día y no se han usado ya).
 
 ## Camino a la versión web
 
