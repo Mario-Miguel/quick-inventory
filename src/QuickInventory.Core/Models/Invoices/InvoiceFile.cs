@@ -1,13 +1,14 @@
 namespace QuickInventory.Core.Models;
 /// <summary>
-/// Factura escaneada (PDF o foto). Pertenece a un <see cref="CashMovement"/> o a una
-/// <see cref="PurchaseInvoice"/> (facturas de proveedores): siempre a uno de los dos y solo a uno.
+/// Factura o albarán escaneado (PDF o foto). Pertenece a un <see cref="CashMovement"/>, a una
+/// <see cref="PurchaseInvoice"/> o a un <see cref="DeliveryNote"/>: siempre a uno y solo a uno.
 /// </summary>
 public class InvoiceFile
 {
     public int Id { get; set; }
     public int? CashMovementId { get; set; }
     public int? PurchaseInvoiceId { get; set; }
+    public int? DeliveryNoteId { get; set; }
     /// <summary>Nombre original del archivo, por ejemplo "factura-ferreteria.pdf".</summary>
     public string FileName { get; set; } = "";
     public string ContentType { get; set; } = "";
@@ -26,10 +27,10 @@ public class InvoiceFile
     public void Validate()
     {
         if (!AllowedExtensions.Contains(Extension))
-            throw new BusinessRuleException("La factura tiene que ser un PDF o una foto (JPG o PNG).");
+            throw new BusinessRuleException("El archivo tiene que ser un PDF o una foto (JPG o PNG).");
         if (Content.Length == 0)
-            throw new BusinessRuleException("El archivo de la factura está vacío.");
+            throw new BusinessRuleException("El archivo está vacío.");
         if (Content.Length > MaxSize)
-            throw new BusinessRuleException($"La factura ocupa demasiado. El máximo son {MaxSize / 1024 / 1024} MB.");
+            throw new BusinessRuleException($"El archivo ocupa demasiado. El máximo son {MaxSize / 1024 / 1024} MB.");
     }
 }

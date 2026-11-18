@@ -27,6 +27,7 @@ public static class DataConfiguration
         services.AddScoped<IInvoiceSeriesService, InvoiceSeriesService>();
         services.AddScoped<IProviderService, ProviderService>();
         services.AddScoped<IPurchaseInvoiceService, PurchaseInvoiceService>();
+        services.AddScoped<IDeliveryNoteService, DeliveryNoteService>();
         return services;
     }
 

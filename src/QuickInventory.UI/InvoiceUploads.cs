@@ -25,9 +25,9 @@ public static class InvoiceUploads
         };
 
         if (!InvoiceFile.AllowedExtensions.Contains(invoice.Extension))
-            throw new BusinessRuleException("La factura tiene que ser un PDF o una foto (JPG o PNG).");
+            throw new BusinessRuleException("El archivo tiene que ser un PDF o una foto (JPG o PNG).");
         if (file.Size > InvoiceFile.MaxSize)
-            throw new BusinessRuleException($"La factura ocupa demasiado. El máximo son {InvoiceFile.MaxSize / 1024 / 1024} MB.");
+            throw new BusinessRuleException($"El archivo ocupa demasiado. El máximo son {InvoiceFile.MaxSize / 1024 / 1024} MB.");
 
         invoice.Content = await file.ReadAsync();
         return invoice;

@@ -31,6 +31,7 @@ public static class Modules
         new("Resumen de ventas", "Ver ventas de la tienda", Icons.Material.Filled.ListAlt, "/shop/summary", ShopOnly),
         new("Inventario", "Productos, precios y unidades en almacén", Icons.Material.Filled.Inventory2, "/inventory", AdminOnly),
         new("Facturas de proveedores", "Apuntar las facturas que nos mandan", Icons.Material.Filled.Receipt, "/purchase-invoices", AdminOnly),
+        new("Albaranes de proveedores", "Apuntar la mercancía que llega", Icons.Material.Filled.Assignment, "/delivery-notes", AdminOnly),
         new("Proveedores", "Nombre, NIF y datos de contacto", Icons.Material.Filled.LocalShipping, "/providers", AdminOnly),
         new("Exportar datos", "Exportar datos de las ventas del mes", Icons.Material.Filled.Download, "/export", AdminOnly),
         new("Tienda online", "Conexión con la tienda web (PrestaShop)", Icons.Material.Filled.Language, "/online-shop", AdminOnly, ClientFeature.PrestaShop),

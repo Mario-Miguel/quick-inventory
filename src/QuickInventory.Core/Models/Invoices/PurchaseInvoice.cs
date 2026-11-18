@@ -2,9 +2,10 @@ namespace QuickInventory.Core.Models;
 
 /// <summary>
 /// Factura de compra: la que nos emite un <see cref="Provider"/>, con sus <see cref="Lines"/> (artículos
-/// del inventario o líneas libres, cada una con su IVA). Lleva siempre el archivo escaneado, que está
-/// aparte en <see cref="InvoiceFile"/> para no cargarlo al listar.
-/// No se borra: si se apuntó por error, se anula (<see cref="Canceled"/>), y eso deshace el stock.
+/// del inventario, líneas libres o líneas copiadas de sus <see cref="DeliveryNotes"/>, cada una con su IVA).
+/// Lleva siempre el archivo escaneado, que está aparte en <see cref="InvoiceFile"/> para no cargarlo al listar.
+/// No se borra: si se apuntó por error, se anula (<see cref="Canceled"/>), y eso deshace el stock que
+/// sumó y deja sus albaranes otra vez pendientes de facturar.
 /// </summary>
 public class PurchaseInvoice
 {
@@ -18,6 +19,12 @@ public class PurchaseInvoice
     public DateTime InvoiceDate { get; set; } = DateTime.Today;
 
     public List<PurchaseInvoiceLine> Lines { get; set; } = [];
+
+    /// <summary>
+    /// Albaranes que incluye la factura. Sus líneas están copiadas en <see cref="Lines"/> (con
+    /// <see cref="PurchaseInvoiceLine.DeliveryNoteId"/>), que es lo que cuenta para el importe.
+    /// </summary>
+    public List<DeliveryNote> DeliveryNotes { get; set; } = [];
 
     /// <summary>Suma de las bases de las líneas. Se calcula con <see cref="CalculateTotals"/>.</summary>
     public decimal BaseAmount { get; set; }
@@ -48,22 +55,8 @@ public class PurchaseInvoice
     public const int MaxNumberLength = 100;
     public const int MaxNotesLength = 300;
 
-    /// <summary>
-    /// Desglose del IVA: las líneas se agrupan por tipo y la cuota se calcula sobre la suma de sus bases
-    /// (no línea a línea), que es como lo hacen las facturas. De mayor a menor tipo.
-    /// </summary>
-    public IReadOnlyList<PurchaseTaxItem> TaxBreakdown() =>
-    [
-        .. Lines
-            .GroupBy(l => l.TaxRate)
-            .Select(g =>
-            {
-                var baseAmount = g.Sum(l => l.BaseAmount);
-                var tax = Math.Round(baseAmount * g.Key.Value / 100m, 2, MidpointRounding.AwayFromZero);
-                return new PurchaseTaxItem(g.Key, baseAmount, tax);
-            })
-            .OrderByDescending(i => i.TaxRate.Value)
-    ];
+    /// <summary>Desglose del IVA por tipo, de mayor a menor (ver <see cref="PurchaseTaxItem.Breakdown"/>).</summary>
+    public IReadOnlyList<PurchaseTaxItem> TaxBreakdown() => PurchaseTaxItem.Breakdown(Lines);
 
     /// <summary>Recalcula <see cref="BaseAmount"/>, <see cref="TaxAmount"/> y <see cref="Amount"/> a partir de las líneas.</summary>
     public void CalculateTotals()
@@ -74,8 +67,13 @@ public class PurchaseInvoice
         Amount = BaseAmount + TaxAmount;
     }
 
-    /// <summary>Resumen de las líneas para la lista: "Botella de sidra × 24, Vaso × 10".</summary>
-    public string Summary => string.Join(", ", Lines.Select(l => l.Quantity == 1 ? l.Description : $"{l.Description} × {l.Quantity}"));
+    /// <summary>
+    /// Resumen para la lista: "Botella de sidra × 24, Vaso × 10, Albarán 153". Las líneas de los
+    /// albaranes no se repiten: basta con el número del albarán.
+    /// </summary>
+    public string Summary => string.Join(", ",
+        Lines.Where(l => !l.IsFromDeliveryNote).Select(l => l.Quantity == 1 ? l.Description : $"{l.Description} × {l.Quantity}")
+            .Concat(DeliveryNotes.Select(n => $"Albarán {n.Number}")));
 
     public void Normalize()
     {
@@ -108,7 +106,7 @@ public class PurchaseInvoice
         if (InvoiceDate > DateTime.Today)
             throw new BusinessRuleException("La fecha de la factura no puede ser posterior a hoy.");
         if (Lines.Count == 0)
-            throw new BusinessRuleException("Añade lo que viene en la factura: busca los artículos o añade una línea libre.");
+            throw new BusinessRuleException("Añade lo que viene en la factura: busca los artículos o los albaranes, o añade una línea libre.");
         foreach (var line in Lines) line.Validate();
         if (Amount <= 0)
             throw new BusinessRuleException("El total de la factura tiene que ser mayor que 0.");

@@ -81,6 +81,103 @@ namespace QuickInventory.Data.Migrations
                     b.ToTable("CashMovements");
                 });
 
+            modelBuilder.Entity("QuickInventory.Core.Models.DeliveryNote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("BaseAmount")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("Canceled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("DeliveryDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("ProviderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PurchaseInvoiceId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("RegistrationDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<long>("TaxAmount")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeliveryDate");
+
+                    b.HasIndex("PurchaseInvoiceId");
+
+                    b.HasIndex("ProviderId", "Number")
+                        .IsUnique()
+                        .HasFilter("\"Canceled\" = false");
+
+                    b.ToTable("DeliveryNotes");
+                });
+
+            modelBuilder.Entity("QuickInventory.Core.Models.DeliveryNoteLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DeliveryNoteId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TaxRate")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("UnitPrice")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeliveryNoteId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("DeliveryNoteLines");
+                });
+
             modelBuilder.Entity("QuickInventory.Core.Models.InvoiceFile", b =>
                 {
                     b.Property<int>("Id")
@@ -101,6 +198,9 @@ namespace QuickInventory.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int?>("DeliveryNoteId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("FileName")
                         .IsRequired()
                         .HasMaxLength(260)
@@ -114,12 +214,15 @@ namespace QuickInventory.Data.Migrations
                     b.HasIndex("CashMovementId")
                         .IsUnique();
 
+                    b.HasIndex("DeliveryNoteId")
+                        .IsUnique();
+
                     b.HasIndex("PurchaseInvoiceId")
                         .IsUnique();
 
                     b.ToTable("InvoiceFiles", t =>
                         {
-                            t.HasCheckConstraint("CK_InvoiceFiles_UnSoloDueno", "num_nonnulls(\"CashMovementId\", \"PurchaseInvoiceId\") = 1");
+                            t.HasCheckConstraint("CK_InvoiceFiles_UnSoloDueno", "num_nonnulls(\"CashMovementId\", \"PurchaseInvoiceId\", \"DeliveryNoteId\") = 1");
                         });
                 });
 
@@ -371,6 +474,9 @@ namespace QuickInventory.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("DeliveryNoteId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -393,6 +499,8 @@ namespace QuickInventory.Data.Migrations
                         .HasColumnType("bigint");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DeliveryNoteId");
 
                     b.HasIndex("ProductId");
 
@@ -527,6 +635,9 @@ namespace QuickInventory.Data.Migrations
                     b.Property<DateTime>("Date")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<int?>("DeliveryNoteId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
@@ -546,6 +657,8 @@ namespace QuickInventory.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Date");
+
+                    b.HasIndex("DeliveryNoteId");
 
                     b.HasIndex("ProductId");
 
@@ -608,11 +721,50 @@ namespace QuickInventory.Data.Migrations
                     b.HasDiscriminator().HasValue("TicketOffice");
                 });
 
+            modelBuilder.Entity("QuickInventory.Core.Models.DeliveryNote", b =>
+                {
+                    b.HasOne("QuickInventory.Core.Models.Provider", "Provider")
+                        .WithMany()
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("QuickInventory.Core.Models.PurchaseInvoice", "PurchaseInvoice")
+                        .WithMany("DeliveryNotes")
+                        .HasForeignKey("PurchaseInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Provider");
+
+                    b.Navigation("PurchaseInvoice");
+                });
+
+            modelBuilder.Entity("QuickInventory.Core.Models.DeliveryNoteLine", b =>
+                {
+                    b.HasOne("QuickInventory.Core.Models.DeliveryNote", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("DeliveryNoteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("QuickInventory.Core.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("QuickInventory.Core.Models.InvoiceFile", b =>
                 {
                     b.HasOne("QuickInventory.Core.Models.CashMovement", null)
                         .WithOne()
                         .HasForeignKey("QuickInventory.Core.Models.InvoiceFile", "CashMovementId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("QuickInventory.Core.Models.DeliveryNote", null)
+                        .WithOne()
+                        .HasForeignKey("QuickInventory.Core.Models.InvoiceFile", "DeliveryNoteId")
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("QuickInventory.Core.Models.PurchaseInvoice", null)
@@ -634,6 +786,11 @@ namespace QuickInventory.Data.Migrations
 
             modelBuilder.Entity("QuickInventory.Core.Models.PurchaseInvoiceLine", b =>
                 {
+                    b.HasOne("QuickInventory.Core.Models.DeliveryNote", null)
+                        .WithMany()
+                        .HasForeignKey("DeliveryNoteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("QuickInventory.Core.Models.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
@@ -674,6 +831,10 @@ namespace QuickInventory.Data.Migrations
 
             modelBuilder.Entity("QuickInventory.Core.Models.StockMovement", b =>
                 {
+                    b.HasOne("QuickInventory.Core.Models.DeliveryNote", null)
+                        .WithMany()
+                        .HasForeignKey("DeliveryNoteId");
+
                     b.HasOne("QuickInventory.Core.Models.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
@@ -693,8 +854,15 @@ namespace QuickInventory.Data.Migrations
                     b.Navigation("Sale");
                 });
 
+            modelBuilder.Entity("QuickInventory.Core.Models.DeliveryNote", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
             modelBuilder.Entity("QuickInventory.Core.Models.PurchaseInvoice", b =>
                 {
+                    b.Navigation("DeliveryNotes");
+
                     b.Navigation("Lines");
                 });
 

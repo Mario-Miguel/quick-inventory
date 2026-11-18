@@ -1,9 +1,10 @@
 @* Apuntar una factura de proveedor. Si el proveedor no está en la lista, se crea desde aquí mismo
-   sin perder lo que ya se ha escrito. Guarda él mismo: si falla (p. ej. factura repetida) se queda
+   sin perder lo que ya se ha escrito. Puede incluir albaranes del proveedor pendientes de facturar:
+   sus líneas se copian para poner el precio de la factura, pero no vuelven a sumar stock. Guarda él mismo: si falla (p. ej. factura repetida) se queda
    abierto, y al cerrarse devuelve la factura ya guardada. *@
-@inject IProviderService ProviderService
 @inject IInventoryService InventoryService
 @inject IPurchaseInvoiceService PurchaseInvoiceService
+@inject IDeliveryNoteService DeliveryNoteService
 @inject IDialogService Dialogs
 @inject IFilePicker FilePicker
 @inject ISnackbar Warnings
@@ -12,51 +13,7 @@
     <DialogContent>
         <MudForm @ref="form">
             <MudStack Spacing="3">
-                <div>
-                    <div class="d-flex align-start gap-2">
-                        <MudAutocomplete T="Provider" Value="provider" ValueChanged="SelectProvider"
-                                         SearchFunc="SearchProviders" ToStringFunc="p => p?.LegalName"
-                                         Label="Proveedor" Placeholder="Escribe el nombre o el NIF"
-                                         Required="true" RequiredError="Elige el proveedor"
-                                         ResetValueOnEmptyText="true" CoerceText="true" MaxItems="null"
-                                         AdornmentIcon="@Icons.Material.Filled.Search" AutoFocus="true"
-                                         Variant="Variant.Outlined" Class="flex-grow-1">
-                            <ItemTemplate Context="p">
-                                <div>
-                                    <div class="product-name">@p.LegalName</div>
-                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@p.Nif</MudText>
-                                </div>
-                            </ItemTemplate>
-                            <NoItemsTemplate>
-                                <MudText Class="pa-2">No hay ningún proveedor con ese nombre. Pulsa «Nuevo proveedor».</MudText>
-                            </NoItemsTemplate>
-                        </MudAutocomplete>
-                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-                                   Class="mt-2" Style="white-space:nowrap; height:56px" OnClick="NewProvider">
-                            Nuevo proveedor
-                        </MudButton>
-                    </div>
-
-                    @* Datos del proveedor elegido, para comprobar que coinciden con los de la factura. *@
-                    @if (provider is not null)
-                    {
-                        <MudPaper Outlined="true" Class="pa-3 mt-2">
-                            <MudText Typo="Typo.body2"><b>NIF:</b> @provider.Nif</MudText>
-                            @if (provider.Address is not null)
-                            {
-                                <MudText Typo="Typo.body2"><b>Dirección:</b> @provider.Address</MudText>
-                            }
-                            @if (provider.PhoneNumber is not null)
-                            {
-                                <MudText Typo="Typo.body2"><b>Teléfono:</b> @provider.PhoneNumber</MudText>
-                            }
-                            @if (provider.Email is not null)
-                            {
-                                <MudText Typo="Typo.body2"><b>Email:</b> @provider.Email</MudText>
-                            }
-                        </MudPaper>
-                    }
-                </div>
+                <ProviderPicker Provider="provider" ProviderChanged="SelectProvider" />
 
                 <div class="d-flex gap-4">
                     <MudTextField T="string" @bind-Value="Invoice.Number" Label="Nº de factura" Required="true"
@@ -67,7 +24,8 @@
                                    RequiredError="Elige la fecha de la factura" Variant="Variant.Outlined" />
                 </div>
 
-                @* Lo que viene en la factura: artículos del inventario (suman stock) o líneas libres. *@
+                @* Lo que viene en la factura: artículos del inventario (suman stock), albaranes (ya sumaron
+                   su stock) o líneas libres. *@
                 <div>
                     <MudText Typo="Typo.subtitle1" Class="mb-2">¿Qué viene en la factura?</MudText>
                     <div class="d-flex align-start flex-wrap gap-2">
@@ -99,6 +57,32 @@
                         Para lo que no es de la tienda (luz, una reparación...) usa «Línea sin inventario».
                     </MudText>
 
+                    @if (provider is not null && pendingNotes.Count > 0)
+                    {
+                        <MudAutocomplete T="DeliveryNote" @ref="noteSearch" Value="null" ValueChanged="AddDeliveryNote"
+                                         SearchFunc="SearchDeliveryNotes" ToStringFunc="NoteName"
+                                         Label="Añadir albarán de este proveedor" Placeholder="Nº de albarán"
+                                         ResetValueOnEmptyText="true" MaxItems="null" Clearable="true"
+                                         AdornmentIcon="@Icons.Material.Filled.Search"
+                                         Variant="Variant.Outlined" Class="mt-3">
+                            <ItemTemplate Context="n">
+                                <div>
+                                    <div class="product-name">Albarán @n.Number · @n.DeliveryDate.ToString("dd/MM/yyyy")</div>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        @n.Summary @(n.Amount > 0 ? $"· {n.Amount:C}" : "· sin valorar")
+                                    </MudText>
+                                </div>
+                            </ItemTemplate>
+                            <NoItemsTemplate>
+                                <MudText Class="pa-2">No hay más albaranes pendientes de facturar con ese número.</MudText>
+                            </NoItemsTemplate>
+                        </MudAutocomplete>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Si la factura incluye albaranes, añádelos aquí: sus artículos ya se sumaron al stock al apuntar el albarán,
+                            así que no se vuelven a sumar. Pon el precio que cobra la factura.
+                        </MudText>
+                    }
+
                     @if (Invoice.Lines.Count > 0)
                     {
                         <MudSimpleTable Dense="true" Outlined="true" Class="mt-3" Style="overflow-x:auto">
@@ -113,7 +97,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var line in Invoice.Lines)
+                                @foreach (var line in Invoice.Lines.Where(l => !l.IsFromDeliveryNote))
                                 {
                                     <tr @key="line">
                                         <td>
@@ -158,6 +142,47 @@
                                         </td>
                                     </tr>
                                 }
+
+                                @* Cada albarán, con sus líneas debajo. La cantidad es la del albarán (ya está en el
+                                   stock); el precio y el IVA se ajustan a lo que pone la factura. *@
+                                @foreach (var note in Invoice.DeliveryNotes)
+                                {
+                                    <tr @key="note" class="delivery-note-row">
+                                        <td colspan="5">
+                                            <span class="product-name">Albarán @note.Number</span>
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary ml-2">
+                                                del @note.DeliveryDate.ToString("dd/MM/yyyy") · sus artículos ya están en el stock
+                                            </MudText>
+                                        </td>
+                                        <td>
+                                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" Size="Size.Small"
+                                                           OnClick="() => RemoveDeliveryNote(note)" aria-label="Quitar albarán" />
+                                        </td>
+                                    </tr>
+                                    @foreach (var line in Invoice.Lines.Where(l => l.DeliveryNoteId == note.Id))
+                                    {
+                                        <tr @key="line">
+                                            <td class="pl-6">@line.Description</td>
+                                            <td>@line.Quantity</td>
+                                            <td>
+                                                <MudNumericField T="decimal" @bind-Value="line.UnitPrice" Min="0m" Format="N2"
+                                                                 Adornment="Adornment.End" AdornmentText="€" HideSpinButtons="true"
+                                                                 Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                            </td>
+                                            <td>
+                                                <MudSelect T="TaxRate" @bind-Value="line.TaxRate" ToStringFunc="t => t?.Name"
+                                                           Variant="Variant.Outlined" Margin="Margin.Dense">
+                                                    @foreach (var rate in TaxRate.All)
+                                                    {
+                                                        <MudSelectItem Value="rate">@(rate == TaxRate.TR000 ? "0% / exenta" : rate.Name)</MudSelectItem>
+                                                    }
+                                                </MudSelect>
+                                            </td>
+                                            <td style="text-align:right; white-space:nowrap">@line.BaseAmount.ToString("C")</td>
+                                            <td></td>
+                                        </tr>
+                                    }
+                                }
                             </tbody>
                         </MudSimpleTable>
 
@@ -178,7 +203,7 @@
                     else if (triedToSave)
                     {
                         <MudText Typo="Typo.body2" Color="Color.Error" Class="mt-2">
-                            Añade lo que viene en la factura: busca los artículos o añade una línea sin inventario.
+                            Añade lo que viene en la factura: busca los artículos o los albaranes, o añade una línea sin inventario.
                         </MudText>
                     }
                 </div>
@@ -247,9 +272,11 @@
 
     [Parameter] public PurchaseInvoice Invoice { get; set; } = new();
 
-    private List<Provider> providers = [];
     private List<ShopProduct> products = [];
     private MudAutocomplete<ShopProduct> productSearch = default!;
+    /// <summary>Albaranes del proveedor elegido pendientes de facturar.</summary>
+    private List<DeliveryNote> pendingNotes = [];
+    private MudAutocomplete<DeliveryNote>? noteSearch;
     private Provider? provider;
     private InvoiceFile? file;
     private bool triedToSave;
@@ -267,25 +294,12 @@
     {
         try
         {
-            providers = await ProviderService.GetProvidersAsync();
             products = (await InventoryService.GetProductsAsync(SalesPoint.Shop)).OfType<ShopProduct>().ToList();
         }
         catch (Exception)
         {
-            Warnings.Add("No se han podido cargar los proveedores o los artículos. Inténtalo de nuevo.", Severity.Error);
+            Warnings.Add("No se han podido cargar los artículos. Inténtalo de nuevo.", Severity.Error);
         }
-    }
-
-    // Sin distinguir mayúsculas ni tildes; el NIF se busca sin espacios ni guiones.
-    private Task<IEnumerable<Provider>> SearchProviders(string? text, CancellationToken _)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return Task.FromResult<IEnumerable<Provider>>(providers);
-
-        var search = text.Trim();
-        var nif = TaxId.Normalize(search);
-        return Task.FromResult(providers.Where(p =>
-            CultureInfo.CurrentCulture.CompareInfo.IndexOf(p.LegalName, search, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0
-            || (nif.Length > 0 && p.Nif.Contains(nif))));
     }
 
     // Por nombre (sin distinguir mayúsculas ni tildes) o por código de barras, que es lo que teclea el lector.
@@ -304,7 +318,7 @@
     {
         if (product is null) return;
 
-        var existing = Invoice.Lines.FirstOrDefault(l => l.ProductId == product.Id);
+        var existing = Invoice.Lines.FirstOrDefault(l => l.ProductId == product.Id && !l.IsFromDeliveryNote);
         if (existing is not null)
             existing.Quantity++;
         else
@@ -315,23 +329,63 @@
 
     private void AddFreeLine() => Invoice.Lines.Add(new PurchaseInvoiceLine());
 
-    private void SelectProvider(Provider? selected)
+    // Los albaranes son de un proveedor: si se cambia, se quitan los que ya se habían añadido.
+    private async Task SelectProvider(Provider? selected)
     {
+        if (selected?.Id == provider?.Id) return;
+
         provider = selected;
         Invoice.ProviderId = selected?.Id ?? 0;
+        if (Invoice.DeliveryNotes.Count > 0)
+        {
+            Invoice.Lines.RemoveAll(l => l.IsFromDeliveryNote);
+            Invoice.DeliveryNotes.Clear();
+            Warnings.Add("Se han quitado los albaranes del proveedor anterior.", Severity.Info);
+        }
+
+        pendingNotes = [];
+        if (selected is null) return;
+        try
+        {
+            pendingNotes = await DeliveryNoteService.GetPendingDeliveryNotesAsync(selected.Id);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se han podido cargar los albaranes del proveedor. Inténtalo de nuevo.", Severity.Error);
+        }
     }
 
-    private async Task NewProvider()
-    {
-        var parameters = new DialogParameters<ProviderDialog> { { x => x.Provider, new Provider() } };
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialog = await Dialogs.ShowAsync<ProviderDialog>("Nuevo proveedor", parameters, options);
-        var result = await dialog.Result;
-        if (result is not { Canceled: false, Data: Provider saved }) return;
+    private static string? NoteName(DeliveryNote? note) => note is null ? null : $"Albarán {note.Number}";
 
-        // Ya está guardado: se añade a la lista y se deja elegido (el buscador muestra su nombre).
-        providers = providers.Append(saved).OrderBy(p => p.LegalName).ToList();
-        SelectProvider(saved);
+    // Por número, sin los que ya están en la factura.
+    private Task<IEnumerable<DeliveryNote>> SearchDeliveryNotes(string? text, CancellationToken _)
+    {
+        var available = pendingNotes.Where(n => !Invoice.DeliveryNotes.Any(d => d.Id == n.Id));
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            var search = text.Trim();
+            available = available.Where(n =>
+                CultureInfo.CurrentCulture.CompareInfo.IndexOf(n.Number, search, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0);
+        }
+        return Task.FromResult(available);
+    }
+
+    private async Task AddDeliveryNote(DeliveryNote? note)
+    {
+        if (note is null) return;
+
+        if (!Invoice.DeliveryNotes.Any(d => d.Id == note.Id))
+        {
+            Invoice.DeliveryNotes.Add(note);
+            Invoice.Lines.AddRange(PurchaseInvoiceLine.From(note));
+        }
+        if (noteSearch is not null) await noteSearch.ClearAsync();
+    }
+
+    private void RemoveDeliveryNote(DeliveryNote note)
+    {
+        Invoice.DeliveryNotes.Remove(note);
+        Invoice.Lines.RemoveAll(l => l.DeliveryNoteId == note.Id);
     }
 
     private async Task Attach()

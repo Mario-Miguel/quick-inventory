@@ -228,10 +228,8 @@ Los importes se guardan en **céntimos enteros** para evitar errores de redondeo
 3. **Historial de movimientos** de cada product en el inventario.
 4. **Copias de seguridad** de la base en la nube con retención larga (ver `docs/verifactu.md`).
 5. **Instalador**: `dotnet publish -c Release -r win-x64 --self-contained` e Inno Setup o MSIX.
-6. **Proveedores y facturas de compra (Admin)**: alta de proveedores habituales y registro de las facturas que nos emiten. Cada factura lleva al menos el proveedor (nombre), el número de factura y un archivo adjunto con la factura.
-7. **Integración con Groupon**: conectarse a Groupon para obtener las facturas de las compras hechas desde allí.
-8. **Albaranes**: poder registrar albaranes, sobre todo al añadir stock en el inventario (la entrada de mercancía queda asociada a su albarán).
-9. **Validar entradas con QR**: escanear el QR de las entradas compradas en Groupon o en la tienda online para comprobarlas en taquilla (que existen, son del día y no se han usado ya).
+6. **Integración con Groupon**: conectarse a Groupon para obtener las facturas de las compras hechas desde allí.
+7. **Validar entradas con QR**: escanear el QR de las entradas compradas en Groupon o en la tienda online para comprobarlas en taquilla (que existen, son del día y no se han usado ya).
 
 ## Camino a la versión web
 

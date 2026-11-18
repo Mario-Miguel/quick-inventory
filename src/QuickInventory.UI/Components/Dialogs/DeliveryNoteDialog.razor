@@ -1,0 +1,281 @@
+@* Apuntar un albarán de proveedor: la mercancía que llega. Suma los artículos al stock, pero no se paga
+   (se paga la factura, que después lo incluye). Guarda él mismo: si falla (p. ej. albarán repetido) se
+   queda abierto, y al cerrarse devuelve el albarán ya guardado. *@
+@inject IInventoryService InventoryService
+@inject IDeliveryNoteService DeliveryNoteService
+@inject IFilePicker FilePicker
+@inject ISnackbar Warnings
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudStack Spacing="3">
+                <ProviderPicker Provider="provider" ProviderChanged="SelectProvider" />
+
+                <div class="d-flex gap-4">
+                    <MudTextField T="string" @bind-Value="Note.Number" Label="Nº de albarán" Required="true"
+                                  RequiredError="Escribe el número del albarán"
+                                  MaxLength="DeliveryNote.MaxNumberLength" Variant="Variant.Outlined" />
+                    <MudDatePicker @bind-Date="deliveryDate" Label="Fecha del albarán" MaxDate="DateTime.Today"
+                                   HelperText="La que pone el albarán" Editable="true" Required="true"
+                                   RequiredError="Elige la fecha del albarán" Variant="Variant.Outlined" />
+                </div>
+
+                @* Lo que llega: artículos del inventario (suman stock) o líneas libres. *@
+                <div>
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">¿Qué viene en el albarán?</MudText>
+                    <div class="d-flex align-start flex-wrap gap-2">
+                        <MudAutocomplete T="ShopProduct" @ref="productSearch" Value="null" ValueChanged="AddProduct"
+                                         SearchFunc="SearchProducts" ToStringFunc="p => p?.Name"
+                                         Label="Buscar artículo del inventario" Placeholder="Nombre o código de barras"
+                                         ResetValueOnEmptyText="true" MaxItems="null" Clearable="true"
+                                         AdornmentIcon="@Icons.Material.Filled.Search"
+                                         Variant="Variant.Outlined" Class="flex-grow-1" Style="min-width:260px">
+                            <ItemTemplate Context="p">
+                                <div>
+                                    <div class="product-name">@p.Name</div>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        Coste @p.CostPrice.ToString("C") · Hay @p.Stock @(p.BarCode is null ? "" : $"· {p.BarCode}")
+                                    </MudText>
+                                </div>
+                            </ItemTemplate>
+                            <NoItemsTemplate>
+                                <MudText Class="pa-2">No hay ningún artículo de Tienda con ese nombre o código.</MudText>
+                            </NoItemsTemplate>
+                        </MudAutocomplete>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlaylistAdd"
+                                   Class="mt-2" Style="white-space:nowrap; height:56px" OnClick="AddFreeLine">
+                            Línea sin inventario
+                        </MudButton>
+                    </div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Los artículos del inventario suman sus unidades al stock. Si el albarán no trae precios, déjalos a 0:
+                        los pondrá la factura.
+                    </MudText>
+
+                    @if (Note.Lines.Count > 0)
+                    {
+                        <MudSimpleTable Dense="true" Outlined="true" Class="mt-3" Style="overflow-x:auto">
+                            <thead>
+                                <tr>
+                                    <th>Concepto</th>
+                                    <th style="width:110px">Cantidad</th>
+                                    <th style="width:150px">Precio unidad (sin IVA)</th>
+                                    <th style="width:120px">IVA</th>
+                                    <th style="text-align:right; width:110px">Importe</th>
+                                    <th style="width:48px"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var line in Note.Lines)
+                                {
+                                    <tr @key="line">
+                                        <td>
+                                            @if (line.IsFree)
+                                            {
+                                                <MudTextField T="string" @bind-Value="line.Description" Placeholder="¿Qué es?"
+                                                              Required="true" RequiredError="Escribe qué es"
+                                                              MaxLength="PurchaseLine.MaxDescriptionLength"
+                                                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                            }
+                                            else
+                                            {
+                                                <div class="product-name">@line.Description</div>
+                                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                                    Suma al stock (hay @((line.Product as ShopProduct)?.Stock ?? 0))
+                                                </MudText>
+                                            }
+                                        </td>
+                                        <td>
+                                            <MudNumericField T="int" @bind-Value="line.Quantity" Min="1" Max="PurchaseLine.MaxQuantity"
+                                                             Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                             Validation="@(new Func<int, string?>(q => q >= 1 ? null : "Mínimo 1"))" />
+                                        </td>
+                                        <td>
+                                            <MudNumericField T="decimal" @bind-Value="line.UnitPrice" Min="0m" Format="N2"
+                                                             Adornment="Adornment.End" AdornmentText="€" HideSpinButtons="true"
+                                                             Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                        </td>
+                                        <td>
+                                            <MudSelect T="TaxRate" @bind-Value="line.TaxRate" ToStringFunc="t => t?.Name"
+                                                       Variant="Variant.Outlined" Margin="Margin.Dense">
+                                                @foreach (var rate in TaxRate.All)
+                                                {
+                                                    <MudSelectItem Value="rate">@(rate == TaxRate.TR000 ? "0% / exenta" : rate.Name)</MudSelectItem>
+                                                }
+                                            </MudSelect>
+                                        </td>
+                                        <td style="text-align:right; white-space:nowrap">@line.BaseAmount.ToString("C")</td>
+                                        <td>
+                                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" Size="Size.Small"
+                                                           OnClick="() => Note.Lines.Remove(line)" aria-label="Quitar línea" />
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+
+                        var breakdown = Note.TaxBreakdown();
+                        @if (breakdown.Sum(i => i.Total) > 0)
+                        {
+                            <MudPaper Outlined="true" Class="pa-3 mt-2">
+                                @foreach (var item in breakdown)
+                                {
+                                    <MudText Typo="Typo.body2">
+                                        Base al @item.TaxRate.Name: @item.BaseAmount.ToString("C") · IVA @item.TaxAmount.ToString("C")
+                                    </MudText>
+                                }
+                                <MudText Typo="Typo.h6" Class="mt-1">
+                                    Total: <b>@breakdown.Sum(i => i.Total).ToString("C")</b>
+                                </MudText>
+                            </MudPaper>
+                        }
+                    }
+                    else if (triedToSave)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Error" Class="mt-2">
+                            Añade lo que viene en el albarán: busca los artículos o añade una línea sin inventario.
+                        </MudText>
+                    }
+                </div>
+
+                <div>
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Albarán escaneado o foto</MudText>
+                    @if (file is null)
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AttachFile"
+                                   OnClick="Attach">
+                            Adjuntar albarán
+                        </MudButton>
+                        @if (triedToSave)
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Error" Class="mt-2">Adjunta el archivo del albarán.</MudText>
+                        }
+                    }
+                    else
+                    {
+                        <MudChip T="string" Icon="@Icons.Material.Filled.AttachFile" Color="Color.Primary" Variant="Variant.Outlined"
+                                 OnClose="() => file = null">
+                            @file.FileName
+                        </MudChip>
+                    }
+                </div>
+
+                <MudTextField T="string" @bind-Value="Note.Notes" Label="Notas (opcional)" Lines="2"
+                              MaxLength="DeliveryNote.MaxNotesLength" Variant="Variant.Outlined" />
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Size="Size.Large" OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary" Disabled="saving" OnClick="Save">
+            Guardar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter] public DeliveryNote Note { get; set; } = new();
+
+    private List<ShopProduct> products = [];
+    private MudAutocomplete<ShopProduct> productSearch = default!;
+    private Provider? provider;
+    private InvoiceFile? file;
+    private bool triedToSave;
+    private bool saving;
+    private MudForm form = default!;
+    private DateTime? deliveryDate = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            products = (await InventoryService.GetProductsAsync(SalesPoint.Shop)).OfType<ShopProduct>().ToList();
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se han podido cargar los artículos. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    // Por nombre (sin distinguir mayúsculas ni tildes) o por código de barras, que es lo que teclea el lector.
+    private Task<IEnumerable<ShopProduct>> SearchProducts(string? text, CancellationToken _)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return Task.FromResult<IEnumerable<ShopProduct>>(products);
+
+        var search = text.Trim();
+        return Task.FromResult(products.Where(p =>
+            CultureInfo.CurrentCulture.CompareInfo.IndexOf(p.Name, search, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0
+            || p.BarCode == search));
+    }
+
+    // Si el artículo ya está en el albarán, se suma una unidad en vez de repetir la línea.
+    private async Task AddProduct(ShopProduct? product)
+    {
+        if (product is null) return;
+
+        var existing = Note.Lines.FirstOrDefault(l => l.ProductId == product.Id);
+        if (existing is not null)
+            existing.Quantity++;
+        else
+            Note.Lines.Add(DeliveryNoteLine.For(product));
+
+        await productSearch.ClearAsync();
+    }
+
+    private void AddFreeLine() => Note.Lines.Add(new DeliveryNoteLine());
+
+    private void SelectProvider(Provider? selected)
+    {
+        provider = selected;
+        Note.ProviderId = selected?.Id ?? 0;
+    }
+
+    private async Task Attach()
+    {
+        try
+        {
+            file = await InvoiceUploads.PickAsync(FilePicker) ?? file;
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido leer el archivo. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    private async Task Save()
+    {
+        triedToSave = true;
+        await form.ValidateAsync();
+        if (!form.IsValid || provider is null || file is null || deliveryDate is null) return;
+
+        Note.DeliveryDate = deliveryDate.Value;
+
+        saving = true;
+        try
+        {
+            var saved = await DeliveryNoteService.RegisterDeliveryNoteAsync(Note, file);
+            Dialog.Close(DialogResult.Ok(saved));
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el albarán. Inténtalo de nuevo.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Cancel() => Dialog.Cancel();
+}

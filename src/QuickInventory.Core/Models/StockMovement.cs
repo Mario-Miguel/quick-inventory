@@ -9,7 +9,11 @@ public enum StockMovementType
     /// <summary>Artículos que llegan con una factura de proveedor.</summary>
     Purchase,
     /// <summary>Anulación de una factura de proveedor: se restan las unidades que sumó.</summary>
-    PurchaseCancelation
+    PurchaseCancelation,
+    /// <summary>Artículos que llegan con un albarán de proveedor.</summary>
+    DeliveryNote,
+    /// <summary>Anulación de un albarán de proveedor: se restan las unidades que sumó.</summary>
+    DeliveryNoteCancelation
 }
 
 /// <summary>
@@ -34,4 +38,7 @@ public class StockMovement
 
     /// <summary>Factura de proveedor que originó el movimiento, si la hay.</summary>
     public int? PurchaseInvoiceId { get; set; }
+
+    /// <summary>Albarán de proveedor que originó el movimiento, si lo hay.</summary>
+    public int? DeliveryNoteId { get; set; }
 }
