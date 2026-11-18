@@ -9,7 +9,9 @@
 @inject IDialogService Dialogs
 @inject ISnackbar Warnings
 
-<MudThemeProvider Theme="theme" />
+@* Siempre en modo claro: MudBlazor sigue por defecto el modo oscuro de Windows, y se cambiaba solo
+   (p. ej. al volver de una factura) a su paleta oscura, sin los colores del cliente. *@
+<MudThemeProvider Theme="theme" IsDarkMode="false" ObserveSystemDarkModeChange="false" />
 <MudPopoverProvider />
 <MudDialogProvider CloseButton="true" BackdropClick="false" />
 <MudSnackbarProvider />

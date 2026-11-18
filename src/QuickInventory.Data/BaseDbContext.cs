@@ -21,6 +21,11 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
     public DbSet<PurchaseInvoiceLine> PurchaseInvoiceLines => Set<PurchaseInvoiceLine>();
     public DbSet<DeliveryNote> DeliveryNotes => Set<DeliveryNote>();
     public DbSet<DeliveryNoteLine> DeliveryNoteLines => Set<DeliveryNoteLine>();
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<CustomerInvoiceSeries> CustomerInvoiceSeries => Set<CustomerInvoiceSeries>();
+    public DbSet<CustomerInvoice> CustomerInvoices => Set<CustomerInvoice>();
+    public DbSet<CustomerInvoiceLine> CustomerInvoiceLines => Set<CustomerInvoiceLine>();
+    public DbSet<InvoiceDesign> InvoiceDesigns => Set<InvoiceDesign>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configuration)
     {
@@ -38,6 +43,7 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
         configuration.Properties<StockMovementType>().HaveConversion<string>();
         configuration.Properties<CashMovementType>().HaveConversion<string>();
         configuration.Properties<SalesPoint>().HaveConversion<string>();
+        configuration.Properties<InvoiceLayout>().HaveConversion<string>();
         configuration.Properties<ProductCategory>().HaveConversion<ProductCategoryConverter>();
         configuration.Properties<InvoiceType>().HaveConversion<InvoiceTypeConverter>();
         configuration.Properties<TaxExemption>().HaveConversion<TaxExemptionConverter>();
@@ -131,6 +137,16 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
             e.HasIndex(s => s.Year).IsUnique();
         });
 
+        // Una serie por año para las facturas a clientes, aparte de la de los tickets. Tabla propia (y no
+        // una columna "tipo" en InvoiceSeries) para que las versiones anteriores de la app, que buscan la
+        // serie de los tickets solo por el año, no encuentren dos.
+        model.Entity<CustomerInvoiceSeries>(e =>
+        {
+            e.Property(i => i.Code).HasMaxLength(NumberingSeries.MaxCodeLength).IsRequired();
+            e.HasIndex(s => s.Code).IsUnique();
+            e.HasIndex(s => s.Year).IsUnique();
+        });
+
         model.Entity<Provider>(e =>
         {
             e.Property(i => i.Nif).HasMaxLength(9);
@@ -140,6 +156,54 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
             e.Property(i => i.PhoneNumber).HasMaxLength(Provider.MaxPhoneNumberLength);
             e.Property(i => i.Notes).HasMaxLength(Provider.MaxNotesLength);
             e.HasIndex(i => i.Nif).IsUnique();
+        });
+
+        model.Entity<Customer>(e =>
+        {
+            e.Property(i => i.Nif).HasMaxLength(9);
+            e.Property(i => i.LegalName).HasMaxLength(Contact.MaxLegalNameLength).IsRequired();
+            e.Property(i => i.Address).HasMaxLength(Contact.MaxAddressLength);
+            e.Property(i => i.Email).HasMaxLength(Contact.MaxEmailLength);
+            e.Property(i => i.PhoneNumber).HasMaxLength(Contact.MaxPhoneNumberLength);
+            e.Property(i => i.Notes).HasMaxLength(Contact.MaxNotesLength);
+            e.HasIndex(i => i.Nif).IsUnique();
+        });
+
+        model.Entity<CustomerInvoice>(e =>
+        {
+            e.Property(i => i.SeriesCode).HasMaxLength(NumberingSeries.MaxCodeLength).IsRequired();
+            e.Property(i => i.InvoiceDate).HasColumnType("date");
+            e.Property(i => i.CustomerNif).HasMaxLength(9).IsRequired();
+            e.Property(i => i.CustomerName).HasMaxLength(Contact.MaxLegalNameLength).IsRequired();
+            e.Property(i => i.CustomerAddress).HasMaxLength(Contact.MaxAddressLength).IsRequired();
+            e.Property(i => i.IssuerNif).HasMaxLength(9).IsRequired();
+            e.Property(i => i.IssuerName).HasMaxLength(120).IsRequired();
+            e.Property(i => i.IssuerAddress).HasMaxLength(300);
+            e.Property(i => i.Notes).HasMaxLength(CustomerInvoice.MaxNotesLength);
+            e.Ignore(i => i.InvoiceId);
+            e.HasOne(i => i.Customer).WithMany().HasForeignKey(i => i.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(i => i.InvoiceDate);
+            // Un número no se puede repetir en la misma serie.
+            e.HasIndex(i => new { i.SeriesCode, i.Number }).IsUnique();
+            e.HasMany(i => i.Lines).WithOne().HasForeignKey(l => l.CustomerInvoiceId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<CustomerInvoiceLine>(e =>
+        {
+            e.Property(l => l.Description).HasMaxLength(CustomerInvoiceLine.MaxDescriptionLength).IsRequired();
+            e.Ignore(l => l.BaseAmount);
+        });
+
+        // Una sola fila: el diseño de las facturas a clientes.
+        model.Entity<InvoiceDesign>(e =>
+        {
+            e.Property(d => d.BackgroundColor).HasMaxLength(7).IsRequired();
+            e.Property(d => d.AccentColor).HasMaxLength(7);
+            e.Property(d => d.FooterText).HasMaxLength(InvoiceDesign.MaxFooterLength);
+            e.Property(d => d.LogoContentType).HasMaxLength(50);
+            e.Property(d => d.LogoFileName).HasMaxLength(InvoiceDesign.MaxFileNameLength);
+            e.Property(d => d.CustomTemplateFileName).HasMaxLength(InvoiceDesign.MaxFileNameLength);
+            e.Ignore(d => d.HasCustomTemplate);
         });
 
         model.Entity<PurchaseInvoice>(e =>

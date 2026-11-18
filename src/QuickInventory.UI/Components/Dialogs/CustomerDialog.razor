@@ -1,0 +1,91 @@
+@* Alta o edición de un cliente (colegio, asociación...). Guarda él mismo: si falla (p. ej. NIF repetido)
+   se queda abierto para corregirlo, y al cerrarse devuelve el cliente ya guardado, con su Id. *@
+@inject ICustomerService CustomerService
+@inject ISnackbar Warnings
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudStack Spacing="3">
+                <MudTextField T="string" @bind-Value="Customer.LegalName" Label="Nombre o razón social" Required="true"
+                              RequiredError="Escribe el nombre del cliente"
+                              HelperText="Tal como saldrá en la factura"
+                              MaxLength="Contact.MaxLegalNameLength" AutoFocus="true" Variant="Variant.Outlined" />
+
+                <MudTextField T="string" @bind-Value="Customer.Nif" Label="NIF" Required="true"
+                              RequiredError="Escribe el NIF del cliente" Validation="@(new Func<string, string?>(ValidateNif))"
+                              HelperText="Da igual si lo escribes con espacios o guiones"
+                              Variant="Variant.Outlined" />
+
+                <MudTextField T="string" @bind-Value="Customer.Address" Label="Dirección" Required="true"
+                              RequiredError="Escribe la dirección: tiene que salir en la factura"
+                              HelperText="Calle, número, código postal y localidad"
+                              MaxLength="Contact.MaxAddressLength" Variant="Variant.Outlined" />
+
+                <div class="d-flex gap-4">
+                    <MudTextField T="string" @bind-Value="Customer.PhoneNumber" Label="Teléfono (opcional)"
+                                  InputType="InputType.Telephone" HelperText="Por ejemplo, «985 12 34 56» o «+351 21 123 4567»"
+                                  Validation="@(new Func<string, string?>(Contact.PhoneNumberError))"
+                                  MaxLength="Contact.MaxPhoneNumberLength" Variant="Variant.Outlined" />
+                    <MudTextField T="string" @bind-Value="Customer.Email" Label="Email (opcional)" InputType="InputType.Email"
+                                  MaxLength="Contact.MaxEmailLength" Variant="Variant.Outlined" />
+                </div>
+
+                <MudTextField T="string" @bind-Value="Customer.Notes" Label="Notas (opcional)"
+                              HelperText="Por ejemplo, la persona de contacto"
+                              Lines="2" MaxLength="Contact.MaxNotesLength" Variant="Variant.Outlined" />
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Size="Size.Large" OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary" Disabled="saving" OnClick="Save">
+            Guardar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    /// <summary>Copia que se edita (con Id 0 si es nuevo).</summary>
+    [Parameter, EditorRequired] public Customer Customer { get; set; } = default!;
+
+    private MudForm form = default!;
+    private bool saving;
+
+    private static string? ValidateNif(string value)
+    {
+        var nif = TaxId.Normalize(value);
+        if (nif.Length == 0) return null;
+        return TaxId.IsValid(nif) ? null : "El NIF no es correcto. Revisa que no falte ni sobre ningún número o letra";
+    }
+
+    private async Task Save()
+    {
+        await form.ValidateAsync();
+        if (!form.IsValid) return;
+
+        saving = true;
+        try
+        {
+            var saved = await CustomerService.SaveCustomerAsync(Customer);
+            Warnings.Add($"Cliente {saved.LegalName} guardado.", Severity.Success);
+            Dialog.Close(DialogResult.Ok(saved));
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el cliente. Inténtalo de nuevo.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Cancel() => Dialog.Cancel();
+}

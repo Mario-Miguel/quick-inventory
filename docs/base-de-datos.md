@@ -28,6 +28,8 @@ erDiagram
     DeliveryNotes ||--|| InvoiceFiles : "archivo"
     PurchaseInvoices |o--o{ DeliveryNotes : "incluye"
     DeliveryNotes |o--o{ PurchaseInvoiceLines : "copiadas en"
+    Customers ||--o{ CustomerInvoices : "le facturamos"
+    CustomerInvoices ||--|{ CustomerInvoiceLines : "tiene"
 
     Products {
         integer Id PK
@@ -170,6 +172,67 @@ erDiagram
         text TaxRate "21 | 10 | 4 | 0"
     }
 
+    Customers {
+        integer Id PK
+        varchar Nif "9 caracteres, normalizado, único"
+        varchar LegalName "nombre o razón social"
+        varchar Address "obligatoria para facturar (la exige la app)"
+        varchar Email "opcional"
+        varchar PhoneNumber "opcional"
+        varchar Notes "opcional"
+        boolean Active "nunca se borra"
+    }
+
+    CustomerInvoiceSeries {
+        integer Id PK
+        varchar Code "único, también frente a InvoiceSeries"
+        integer Year "único"
+        integer LastNumber
+    }
+
+    CustomerInvoices {
+        integer Id PK
+        varchar SeriesCode "único con Number"
+        integer Number
+        text InvoiceType "F1"
+        date InvoiceDate "con índice"
+        integer CustomerId FK
+        varchar CustomerNif "copia"
+        varchar CustomerName "copia"
+        varchar CustomerAddress "copia"
+        varchar IssuerNif "copia del titular"
+        varchar IssuerName "copia del titular"
+        varchar IssuerAddress "copia del titular, opcional"
+        bigint BaseAmount "céntimos"
+        bigint TaxAmount "céntimos"
+        bigint Amount "céntimos"
+        varchar Notes "observaciones, salen en la factura"
+        timestamp RegistrationDate "cuándo se emitió"
+    }
+
+    CustomerInvoiceLines {
+        integer Id PK
+        integer CustomerInvoiceId FK
+        varchar Description "concepto libre"
+        integer Quantity
+        bigint UnitPrice "céntimos, sin IVA"
+        text TaxRate "21 | 10 | 4; null si exenta"
+        text TaxExemption "E1...E6; null si lleva IVA"
+    }
+
+    InvoiceDesigns {
+        integer Id PK "una sola fila"
+        text Layout "LogoLeft | LogoCentered | Compact"
+        varchar BackgroundColor "#RRGGBB"
+        varchar AccentColor "#RRGGBB; null = color del cliente"
+        varchar FooterText "opcional"
+        bytea Logo "PNG o JPG, máx. 1 MB; opcional"
+        varchar LogoContentType
+        varchar LogoFileName
+        text CustomTemplate "plantilla HTML importada; null = la de Layout"
+        varchar CustomTemplateFileName
+    }
+
     Issuers {
         integer Id PK
         varchar Nif "9 caracteres, normalizado"
@@ -201,6 +264,11 @@ erDiagram
 | `PurchaseInvoiceLines`  | `PurchaseInvoiceLine`                      | Lo que viene en cada factura de proveedor: artículos de Tienda (suman stock), líneas libres o líneas copiadas de un albarán (no suman stock). Cada línea tiene su IVA. |
 | `DeliveryNotes`         | `DeliveryNote`                             | Albaranes de proveedores: la mercancía que llega. Suman stock, no se pagan; la factura que llega después los incluye. No se borran (`Canceled`). |
 | `DeliveryNoteLines`     | `DeliveryNoteLine`                         | Lo que viene en cada albarán. Mismas columnas que las líneas de factura (las dos heredan de `PurchaseLine`, que no es tabla).                   |
+| `Customers`             | `Customer`                                 | Clientes habituales (colegios, asociaciones...) a los que se emiten facturas. Mismas columnas que `Providers` (los dos heredan de `Contact`, que no es tabla). No se borran (`Active`). |
+| `CustomerInvoiceSeries` | `CustomerInvoiceSeries`                    | Serie anual de las facturas a clientes (p. ej. `FC2026`), aparte de la de los tickets. Tabla propia para que las versiones anteriores, que buscan la serie de los tickets solo por año, no vean dos. |
+| `CustomerInvoices`      | `CustomerInvoice`                          | Facturas completas (`F1`) que emite el museo. Llevan copiados los datos del titular y del cliente. No se cambian ni se borran.                  |
+| `CustomerInvoiceLines`  | `CustomerInvoiceLine`                      | Conceptos de cada factura a cliente, con precio sin IVA y su IVA o su exención.                                                                 |
+| `InvoiceDesigns`        | `InvoiceDesign`                            | Diseño de las facturas a clientes (una sola fila): disposición, colores, pie, logotipo o plantilla HTML importada. Solo cambia su aspecto al imprimirlas; los datos de cada factura están en `CustomerInvoices`. Ver `InvoiceTemplate`. |
 | `OnlineShopSettings`    | `OnlineShopSettings`                       | Conexión con la tienda online (PrestaShop). Las entradas online (`OnlineTicket`) no se guardan: se leen de la tienda cada vez.                  |
 | `Issuers`               | `Issuer`                                   | Titular del museo (quien emite las facturas). Una sola fila, creada por el asistente de primera instalación.                                    |
 | `__EFMigrationsHistory` | —                                          | Migraciones aplicadas. La gestiona EF; la app solo la lee para comprobar la versión.                                                            |
@@ -231,6 +299,11 @@ erDiagram
   esas líneas **no** generan movimientos de stock, porque ya los generó el albarán. Al anular la factura,
   `PurchaseInvoiceId` vuelve a null y el albarán queda otra vez pendiente de facturar.
 - **DeliveryNote → InvoiceFile (1 a 1).** Índice único en `DeliveryNoteId`.
+- **Customer → CustomerInvoices (1 a muchos).** `Restrict`. La factura copia NIF, nombre y dirección del cliente
+  y del titular (`Issuers`) al emitirse, así que editarlos después no cambia las facturas ya emitidas.
+- **CustomerInvoiceSeries → CustomerInvoices.** No es una FK: la factura guarda el código (`SeriesCode`) y su
+  número, como `Sales.InvoiceSeries`. El número lo da `CustomerInvoiceService` con el mismo bloqueo que los tickets
+  (`AdvisoryLocks.Invoicing`), y la fecha no puede ser anterior a la de la última factura de la serie.
 - **Provider → PurchaseInvoices (1 a muchos).** `Restrict`: un proveedor con facturas no se puede borrar
   (de todas formas, nunca se borran: se desactivan).
 - `CashMovements.SalesPoint` y `PurchaseInvoices.PaymentSalesPoint` **no** son relaciones: son el enum de la
@@ -245,7 +318,7 @@ erDiagram
   (`"Ticket"`, `"Shop"`).
 - **Fechas:** `timestamp without time zone`, con la hora local del museo (`DateTime.Now`).
   Es una convención de `BaseDbContext.ConfigureConventions`.
-  Excepción: `PurchaseInvoices.InvoiceDate`, `PaymentDate` y `DeliveryNotes.DeliveryDate` son `date`
+  Excepción: `PurchaseInvoices.InvoiceDate`, `PaymentDate`, `DeliveryNotes.DeliveryDate` y `CustomerInvoices.InvoiceDate` son `date`
   (sin hora), porque son el día que pone el papel y el día del pago.
 - **Herencia:** una tabla por jerarquía. `Products.Type` y `Sales.SalesPoint` dicen la clase; las
   columnas de una sola clase (`Stock`, `CountsAs`, `GuidedVisit`...) son null en las filas de la otra.

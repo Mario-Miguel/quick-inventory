@@ -1,0 +1,105 @@
+@page "/customer-invoices/{InvoiceId:int}"
+@* Una factura a cliente tal como se entrega: se imprime o se guarda en PDF. En los dos casos solo sale la
+   factura (ver .invoice-document en app.css). *@
+@inject ICustomerInvoiceService CustomerInvoiceService
+@inject IInvoiceDesignService InvoiceDesignService
+@inject IPagePrinter Printer
+@inject IFileSaver FileSaver
+@inject ISnackbar Warnings
+@inject NavigationManager Navigation
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Navigation.NavigateTo("/customer-invoices"))">
+        Volver a las facturas
+    </MudButton>
+    <MudSpacer />
+    @if (invoice is not null)
+    {
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+                   StartIcon="@Icons.Material.Filled.PictureAsPdf" Disabled="working" OnClick="SavePdf">
+            Guardar en PDF
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                   StartIcon="@Icons.Material.Filled.Print" Disabled="working" OnClick="Print">
+            Imprimir
+        </MudButton>
+    }
+</div>
+
+@if (loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (invoice is null)
+{
+    <MudAlert Severity="Severity.Warning">No se encuentra la factura.</MudAlert>
+}
+else
+{
+    <InvoiceDocument Invoice="invoice" Design="design" />
+}
+
+@code {
+    [Parameter] public int InvoiceId { get; set; }
+
+    private CustomerInvoice? invoice;
+    private InvoiceDesign design = new();
+    private bool loading = true;
+    private bool working;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try
+        {
+            invoice = await CustomerInvoiceService.GetInvoiceAsync(InvoiceId);
+            design = await InvoiceDesignService.GetDesignAsync();
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido cargar la factura. Inténtalo de nuevo.", Severity.Error);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task Print()
+    {
+        try
+        {
+            await Printer.PrintAsync();
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido abrir la ventana de imprimir.", Severity.Error);
+        }
+    }
+
+    private async Task SavePdf()
+    {
+        if (invoice is null) return;
+        working = true;
+        try
+        {
+            var pdf = await Printer.ToPdfAsync();
+            var name = $"Factura {invoice.InvoiceId}.pdf";
+            if (await FileSaver.SaveAsync(name, pdf))
+                Warnings.Add($"Factura guardada: {name}", Severity.Success);
+        }
+        catch (IOException)
+        {
+            Warnings.Add("No se ha podido guardar el PDF. Si lo tienes abierto, ciérralo e inténtalo de nuevo.", Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido generar el PDF. Inténtalo de nuevo.", Severity.Error);
+        }
+        finally
+        {
+            working = false;
+        }
+    }
+}

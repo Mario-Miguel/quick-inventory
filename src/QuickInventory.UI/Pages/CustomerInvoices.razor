@@ -1,0 +1,139 @@
+@page "/customer-invoices"
+@inject ICustomerInvoiceService CustomerInvoiceService
+@inject IDialogService Dialogs
+@inject ISnackbar Warnings
+@inject NavigationManager Navigation
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    <h1 class="page-title mb-0">Facturas a clientes</h1>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.School" OnClick="@(() => Navigation.NavigateTo("/customers"))">
+        Clientes
+    </MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="Add">
+        Nueva factura
+    </MudButton>
+</div>
+
+<MudText Class="mb-4">
+    Facturas que el museo hace a colegios, asociaciones u otras organizaciones. Se numeran solas y llevan los
+    datos del titular. Una vez emitidas no se pueden cambiar ni borrar.
+</MudText>
+
+@* Selector de mes (por la fecha de la factura): flechas grandes en vez de un calendario. *@
+<div class="d-flex align-center gap-2 mb-4">
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Variant="Variant.Outlined" Size="Size.Large"
+                   OnClick="() => ChangeMonth(-1)" aria-label="Mes anterior" />
+    <MudText Typo="Typo.h6" Class="export-month">@month.ToString("MMMM 'de' yyyy")</MudText>
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Variant="Variant.Outlined" Size="Size.Large"
+                   OnClick="() => ChangeMonth(1)" Disabled="@IsCurrentMonth" aria-label="Mes siguiente" />
+</div>
+
+@if (invoices is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudTable T="CustomerInvoice" Items="invoices" Hover="true" Striped="true" Dense="true" Elevation="1" RowsPerPage="25"
+              Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>
+                <MudTableSortLabel T="CustomerInvoice" SortBy="i => i.Number" InitialDirection="SortDirection.Descending">Factura</MudTableSortLabel>
+            </MudTh>
+            <MudTh><MudTableSortLabel T="CustomerInvoice" SortBy="i => i.InvoiceDate">Fecha</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel T="CustomerInvoice" SortBy="i => i.CustomerName">Cliente</MudTableSortLabel></MudTh>
+            <MudTh>Concepto</MudTh>
+            <MudTh Style="text-align:right">
+                <MudTableSortLabel T="CustomerInvoice" SortBy="i => i.Amount">Importe</MudTableSortLabel>
+            </MudTh>
+            <MudTh />
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Factura" Style="white-space:nowrap"><span class="product-name">@context.InvoiceId</span></MudTd>
+            <MudTd DataLabel="Fecha" Style="white-space:nowrap">@context.InvoiceDate.ToString("dd/MM/yyyy")</MudTd>
+            <MudTd DataLabel="Cliente">
+                <span class="product-name">@context.CustomerName</span>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.CustomerNif</MudText>
+            </MudTd>
+            <MudTd DataLabel="Concepto">
+                <MudText Typo="Typo.body2">@context.Summary</MudText>
+            </MudTd>
+            <MudTd DataLabel="Importe" Style="text-align:right;white-space:nowrap">
+                <div class="product-name">@context.Amount.ToString("C")</div>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Base @context.BaseAmount.ToString("C") + IVA @context.TaxAmount.ToString("C")
+                </MudText>
+            </MudTd>
+            <MudTd Style="text-align:right">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Print" OnClick="() => Open(context)">
+                    Ver / imprimir
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <MudText Class="pa-4">No hay facturas de este mes.</MudText>
+        </NoRecordsContent>
+
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Filas por página:"
+                           InfoFormat="{first_item}-{last_item} de {all_items}" />
+        </PagerContent>
+    </MudTable>
+
+    <MudPaper Class="pa-4 mt-4" Outlined="true">
+        <MudText Typo="Typo.h6">Total del mes: <b>@invoices.Sum(i => i.Amount).ToString("C")</b></MudText>
+        <MudText>Base imponible @invoices.Sum(i => i.BaseAmount).ToString("C") · IVA @invoices.Sum(i => i.TaxAmount).ToString("C")</MudText>
+    </MudPaper>
+}
+
+@code {
+    /// <summary>Primer día del mes que se está viendo.</summary>
+    private DateTime month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+
+    private List<CustomerInvoice>? invoices;
+
+    private bool IsCurrentMonth => month.AddMonths(1) > DateTime.Today;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task ChangeMonth(int months)
+    {
+        month = month.AddMonths(months);
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        try
+        {
+            invoices = await CustomerInvoiceService.GetInvoicesAsync(month, month.AddMonths(1));
+        }
+        catch (Exception)
+        {
+            invoices = [];
+            Warnings.Add("No se han podido cargar las facturas. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    private async Task Add()
+    {
+        var parameters = new DialogParameters<CustomerInvoiceDialog> { { x => x.Invoice, new CustomerInvoice() } };
+        // Más ancho que los demás: lleva la tabla de conceptos.
+        var options = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true };
+        var dialog = await Dialogs.ShowAsync<CustomerInvoiceDialog>("Nueva factura a cliente", parameters, options);
+        var result = await dialog.Result;
+        if (result is not { Canceled: false, Data: CustomerInvoice saved }) return;
+
+        Warnings.Add($"Factura {saved.InvoiceId} emitida.", Severity.Success);
+        // Se abre para imprimirla o guardarla en PDF, que es lo siguiente que se hace.
+        Open(saved);
+    }
+
+    private void Open(CustomerInvoice invoice) => Navigation.NavigateTo($"/customer-invoices/{invoice.Id}");
+}

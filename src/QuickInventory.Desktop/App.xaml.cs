@@ -191,6 +191,8 @@ public partial class App : Application
         services.AddSingleton<IFileSaver, DesktopFileSaver>();
         // Diálogo "Abrir" de Windows para adjuntar archivos (facturas).
         services.AddSingleton<IFilePicker, DesktopFilePicker>();
+        // Imprimir o guardar en PDF la pantalla actual (facturas a clientes).
+        services.AddSingleton<IPagePrinter, DesktopPagePrinter>();
 
         return services.BuildServiceProvider();
     }
