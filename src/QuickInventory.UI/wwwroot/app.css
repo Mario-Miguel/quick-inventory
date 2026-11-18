@@ -258,3 +258,8 @@ body {
   font-weight: 700;
   border-top: 2px solid #d1d5db;
 }
+
+/* Factura de proveedor: cabecera de cada albarán incluido, encima de sus líneas. */
+tr.delivery-note-row td {
+  background-color: color-mix(in srgb, var(--mud-palette-primary) 8%, transparent);
+}

@@ -12,6 +12,10 @@
                StartIcon="@Icons.Material.Filled.LocalShipping" OnClick="@(() => Navigation.NavigateTo("/providers"))">
         Proveedores
     </MudButton>
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.Assignment" OnClick="@(() => Navigation.NavigateTo("/delivery-notes"))">
+        Albaranes
+    </MudButton>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
                StartIcon="@Icons.Material.Filled.Add" OnClick="Add">
         Nueva factura
@@ -257,7 +261,8 @@ else
     {
         var confirmed = await Dialogs.ShowMessageBoxAsync(
             "Anular factura",
-            $"¿Seguro que quieres anular la factura {invoice.Number} de {invoice.Provider?.LegalName}? Se conserva en el historial.",
+            $"¿Seguro que quieres anular la factura {invoice.Number} de {invoice.Provider?.LegalName}? Se conserva en el historial."
+                + (invoice.DeliveryNotes.Count > 0 ? " Sus albaranes volverán a quedar pendientes de facturar." : ""),
             yesText: "Anular",
             cancelText: "Cancelar");
         if (confirmed != true) return;

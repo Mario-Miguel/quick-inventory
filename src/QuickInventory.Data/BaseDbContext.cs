@@ -19,6 +19,8 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
     public DbSet<Provider> Providers => Set<Provider>();
     public DbSet<PurchaseInvoice> PurchaseInvoices => Set<PurchaseInvoice>();
     public DbSet<PurchaseInvoiceLine> PurchaseInvoiceLines => Set<PurchaseInvoiceLine>();
+    public DbSet<DeliveryNote> DeliveryNotes => Set<DeliveryNote>();
+    public DbSet<DeliveryNoteLine> DeliveryNoteLines => Set<DeliveryNoteLine>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configuration)
     {
@@ -64,6 +66,7 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
         {
             e.HasOne(m => m.Product).WithMany().HasForeignKey(m => m.ProductId);
             e.HasOne<PurchaseInvoice>().WithMany().HasForeignKey(m => m.PurchaseInvoiceId);
+            e.HasOne<DeliveryNote>().WithMany().HasForeignKey(m => m.DeliveryNoteId);
             e.HasIndex(m => m.Date);
         });
 
@@ -93,15 +96,16 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
             e.HasIndex(m => m.Date);
         });
 
-        // Como mucho un archivo por movimiento o por factura de proveedor, y siempre de uno de los dos.
+        // Como mucho un archivo por movimiento, factura o albarán de proveedor, y siempre de uno solo.
         model.Entity<InvoiceFile>(e =>
         {
             e.Property(f => f.FileName).HasMaxLength(260).IsRequired();
             e.Property(f => f.ContentType).HasMaxLength(100);
             e.HasOne<CashMovement>().WithOne().HasForeignKey<InvoiceFile>(f => f.CashMovementId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<PurchaseInvoice>().WithOne().HasForeignKey<InvoiceFile>(f => f.PurchaseInvoiceId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<DeliveryNote>().WithOne().HasForeignKey<InvoiceFile>(f => f.DeliveryNoteId).OnDelete(DeleteBehavior.Cascade);
             e.ToTable(t => t.HasCheckConstraint("CK_InvoiceFiles_UnSoloDueno",
-                "num_nonnulls(\"CashMovementId\", \"PurchaseInvoiceId\") = 1"));
+                "num_nonnulls(\"CashMovementId\", \"PurchaseInvoiceId\", \"DeliveryNoteId\") = 1"));
         });
 
         model.Entity<OnlineShopSettings>(e =>
@@ -156,6 +160,32 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
         model.Entity<PurchaseInvoiceLine>(e =>
         {
             e.Property(l => l.Description).HasMaxLength(PurchaseInvoiceLine.MaxDescriptionLength).IsRequired();
+            e.HasOne(l => l.Product).WithMany().HasForeignKey(l => l.ProductId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<DeliveryNote>().WithMany().HasForeignKey(l => l.DeliveryNoteId).OnDelete(DeleteBehavior.Restrict);
+            e.Ignore(l => l.BaseAmount);
+            e.Ignore(l => l.IsFree);
+            e.Ignore(l => l.IsFromDeliveryNote);
+        });
+
+        model.Entity<DeliveryNote>(e =>
+        {
+            e.Property(n => n.Number).HasMaxLength(DeliveryNote.MaxNumberLength).IsRequired();
+            e.Property(n => n.Notes).HasMaxLength(DeliveryNote.MaxNotesLength);
+            e.Property(n => n.FileName).HasMaxLength(260).IsRequired();
+            e.Property(n => n.DeliveryDate).HasColumnType("date");
+            e.Ignore(n => n.IsInvoiced);
+            e.HasOne(n => n.Provider).WithMany().HasForeignKey(n => n.ProviderId).OnDelete(DeleteBehavior.Restrict);
+            // La factura que lo incluye. Al anularla se vuelve a dejar a null (lo hace el servicio).
+            e.HasOne(n => n.PurchaseInvoice).WithMany(i => i.DeliveryNotes).HasForeignKey(n => n.PurchaseInvoiceId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(n => n.DeliveryDate);
+            // El mismo albarán no se puede apuntar dos veces; los anulados no cuentan.
+            e.HasIndex(n => new { n.ProviderId, n.Number }).IsUnique().HasFilter("\"Canceled\" = false");
+            e.HasMany(n => n.Lines).WithOne().HasForeignKey(l => l.DeliveryNoteId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<DeliveryNoteLine>(e =>
+        {
+            e.Property(l => l.Description).HasMaxLength(PurchaseLine.MaxDescriptionLength).IsRequired();
             e.HasOne(l => l.Product).WithMany().HasForeignKey(l => l.ProductId).OnDelete(DeleteBehavior.Restrict);
             e.Ignore(l => l.BaseAmount);
             e.Ignore(l => l.IsFree);

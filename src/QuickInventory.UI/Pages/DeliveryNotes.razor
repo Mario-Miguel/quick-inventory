@@ -1,0 +1,245 @@
+@page "/delivery-notes"
+@inject IDeliveryNoteService DeliveryNoteService
+@inject IDialogService Dialogs
+@inject IFileSaver FileSaver
+@inject ISnackbar Warnings
+@inject NavigationManager Navigation
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    <h1 class="page-title mb-0">Albaranes de proveedores</h1>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.LocalShipping" OnClick="@(() => Navigation.NavigateTo("/providers"))">
+        Proveedores
+    </MudButton>
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.Receipt" OnClick="@(() => Navigation.NavigateTo("/purchase-invoices"))">
+        Facturas
+    </MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="Add">
+        Nuevo albarán
+    </MudButton>
+</div>
+
+<MudText Class="mb-4">
+    La mercancía que nos entregan los proveedores. Al apuntar el albarán, sus artículos se suman al stock.
+    No se paga aquí: cuando llegue la factura, añade el albarán en ella.
+</MudText>
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    @* Selector de mes (por la fecha del albarán): flechas grandes en vez de un calendario. *@
+    @if (!pendingOnly)
+    {
+        <div class="d-flex align-center gap-2">
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Variant="Variant.Outlined" Size="Size.Large"
+                           OnClick="() => ChangeMonth(-1)" aria-label="Mes anterior" />
+            <MudText Typo="Typo.h6" Class="export-month">@month.ToString("MMMM 'de' yyyy")</MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Variant="Variant.Outlined" Size="Size.Large"
+                           OnClick="() => ChangeMonth(1)" Disabled="@IsCurrentMonth" aria-label="Mes siguiente" />
+        </div>
+    }
+    <MudSwitch T="bool" Value="pendingOnly" ValueChanged="TogglePending" Color="Color.Warning"
+               Label="Solo pendientes de facturar (de cualquier mes)" />
+</div>
+
+@if (notes is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudTable T="DeliveryNote" Items="notes" Hover="true" Striped="true" Dense="true" Elevation="1" RowsPerPage="25"
+              Breakpoint="Breakpoint.Sm"
+              RowClassFunc="@((note, _) => note.Canceled ? "sale-canceled-row" : "")">
+        <HeaderContent>
+            <MudTh>
+                <MudTableSortLabel T="DeliveryNote" SortBy="n => n.DeliveryDate" InitialDirection="SortDirection.Descending">Fecha</MudTableSortLabel>
+            </MudTh>
+            <MudTh><MudTableSortLabel T="DeliveryNote" SortBy="n => n.Provider!.LegalName">Proveedor</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel T="DeliveryNote" SortBy="n => n.Number">Albarán</MudTableSortLabel></MudTh>
+            <MudTh Style="text-align:right">
+                <MudTableSortLabel T="DeliveryNote" SortBy="n => n.Amount">Importe</MudTableSortLabel>
+            </MudTh>
+            <MudTh>Factura</MudTh>
+            <MudTh>Archivo</MudTh>
+            <MudTh />
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Fecha" Style="white-space:nowrap">@context.DeliveryDate.ToString("dd/MM/yyyy")</MudTd>
+            <MudTd DataLabel="Proveedor">
+                <span class="product-name">@context.Provider?.LegalName</span>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Provider?.Nif</MudText>
+            </MudTd>
+            <MudTd DataLabel="Albarán">
+                <div>
+                    Nº @context.Number
+                    @if (context.Canceled)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-2">Anulado</MudChip>
+                    }
+                </div>
+                <MudText Typo="Typo.body2">@context.Summary</MudText>
+                @if (context.Notes is not null)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Notes</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Importe" Style="text-align:right;white-space:nowrap">
+                @if (context.Amount > 0)
+                {
+                    <div class="product-name">@context.Amount.ToString("C")</div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Base @context.BaseAmount.ToString("C") + IVA @context.TaxAmount.ToString("C")
+                    </MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Sin valorar</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Factura">
+                @if (context.PurchaseInvoice is { } invoice)
+                {
+                    <MudChip T="string" Icon="@Icons.Material.Filled.Receipt" Size="Size.Small" Color="Color.Success"
+                             Variant="Variant.Outlined" Class="ml-0">
+                        Factura @invoice.Number
+                    </MudChip>
+                }
+                else if (!context.Canceled)
+                {
+                    <MudChip T="string" Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Color="Color.Warning"
+                             Variant="Variant.Outlined" Class="ml-0">
+                        Pendiente de facturar
+                    </MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Archivo">
+                <MudTooltip Text="Guardar una copia del albarán">
+                    <MudChip T="string" Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" Color="Color.Primary"
+                             Variant="Variant.Outlined" Class="ml-0" OnClick="() => SaveFile(context)">
+                        @context.FileName
+                    </MudChip>
+                </MudTooltip>
+            </MudTd>
+            <MudTd Style="text-align:right">
+                @if (!context.Canceled && !context.IsInvoiced)
+                {
+                    <MudTooltip Text="Anular">
+                        <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" Size="Size.Small"
+                                       OnClick="() => Cancel(context)" aria-label="Anular" />
+                    </MudTooltip>
+                }
+            </MudTd>
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <MudText Class="pa-4">@(pendingOnly ? "No hay albaranes pendientes de facturar." : "No hay albaranes de este mes.")</MudText>
+        </NoRecordsContent>
+
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Filas por página:"
+                           InfoFormat="{first_item}-{last_item} de {all_items}" />
+        </PagerContent>
+    </MudTable>
+}
+
+@code {
+    /// <summary>Primer día del mes que se está viendo.</summary>
+    private DateTime month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+
+    private List<DeliveryNote>? notes;
+    private bool pendingOnly;
+
+    private bool IsCurrentMonth => month.AddMonths(1) > DateTime.Today;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task ChangeMonth(int months)
+    {
+        month = month.AddMonths(months);
+        await Load();
+    }
+
+    private async Task TogglePending(bool value)
+    {
+        pendingOnly = value;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        try
+        {
+            notes = pendingOnly
+                ? await DeliveryNoteService.GetPendingDeliveryNotesAsync()
+                : await DeliveryNoteService.GetDeliveryNotesAsync(month, month.AddMonths(1));
+        }
+        catch (Exception)
+        {
+            notes = [];
+            Warnings.Add("No se han podido cargar los albaranes. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    private async Task Add()
+    {
+        var parameters = new DialogParameters<DeliveryNoteDialog> { { x => x.Note, new DeliveryNote() } };
+        // Más ancho que los demás: lleva la tabla de líneas.
+        var options = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true };
+        var dialog = await Dialogs.ShowAsync<DeliveryNoteDialog>("Nuevo albarán de proveedor", parameters, options);
+        var result = await dialog.Result;
+        if (result is not { Canceled: false, Data: DeliveryNote saved }) return;
+
+        Warnings.Add($"Albarán {saved.Number} de {saved.Provider?.LegalName} guardado.", Severity.Success);
+
+        // Se va al mes del albarán para verlo en la lista.
+        if (!pendingOnly) month = new(saved.DeliveryDate.Year, saved.DeliveryDate.Month, 1);
+        await Load();
+    }
+
+    private async Task Cancel(DeliveryNote note)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Anular albarán",
+            $"¿Seguro que quieres anular el albarán {note.Number} de {note.Provider?.LegalName}? Sus artículos se restan del stock. Se conserva en el historial.",
+            yesText: "Anular",
+            cancelText: "Cancelar");
+        if (confirmed != true) return;
+
+        try
+        {
+            await DeliveryNoteService.CancelDeliveryNoteAsync(note.Id);
+            Warnings.Add("Albarán anulado.", Severity.Success);
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el cambio. Inténtalo de nuevo.", Severity.Error);
+        }
+        await Load();
+    }
+
+    private async Task SaveFile(DeliveryNote note)
+    {
+        try
+        {
+            var file = await DeliveryNoteService.GetDeliveryNoteFileAsync(note.Id);
+            if (file is null)
+            {
+                Warnings.Add("No se encuentra el archivo de este albarán.", Severity.Warning);
+                return;
+            }
+            if (await FileSaver.SaveAsync(file.FileName, file.Content))
+                Warnings.Add($"Albarán guardado: {file.FileName}", Severity.Success);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el albarán. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+}

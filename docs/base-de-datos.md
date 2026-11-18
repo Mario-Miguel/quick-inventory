@@ -21,6 +21,13 @@ erDiagram
     Products |o--o{ PurchaseInvoiceLines : "se compra en"
     PurchaseInvoices |o--o{ StockMovements : "origina"
     PurchaseInvoices ||--|| InvoiceFiles : "archivo"
+    Providers ||--o{ DeliveryNotes : "nos entrega"
+    DeliveryNotes ||--|{ DeliveryNoteLines : "tiene"
+    Products |o--o{ DeliveryNoteLines : "llega en"
+    DeliveryNotes |o--o{ StockMovements : "origina"
+    DeliveryNotes ||--|| InvoiceFiles : "archivo"
+    PurchaseInvoices |o--o{ DeliveryNotes : "incluye"
+    DeliveryNotes |o--o{ PurchaseInvoiceLines : "copiadas en"
 
     Products {
         integer Id PK
@@ -66,8 +73,9 @@ erDiagram
         integer ProductId FK
         integer SaleId FK "opcional"
         integer PurchaseInvoiceId FK "opcional"
+        integer DeliveryNoteId FK "opcional"
         integer Amount "+ entra, - sale"
-        text Type "Input | Output | Sale | Cancelation | Purchase | PurchaseCancelation"
+        text Type "Input | Output | Sale | Cancelation | Purchase | PurchaseCancelation | DeliveryNote | DeliveryNoteCancelation"
         text Description "opcional"
         timestamp Date "con índice"
     }
@@ -91,7 +99,8 @@ erDiagram
     InvoiceFiles {
         integer Id PK
         integer CashMovementId FK "opcional, único"
-        integer PurchaseInvoiceId FK "opcional, único; uno de los dos (check)"
+        integer PurchaseInvoiceId FK "opcional, único"
+        integer DeliveryNoteId FK "opcional, único; uno solo de los tres (check)"
         varchar FileName
         varchar ContentType
         bytea Content "PDF o imagen, máx. 10 MB"
@@ -129,9 +138,35 @@ erDiagram
         integer Id PK
         integer PurchaseInvoiceId FK
         integer ProductId FK "artículo de Tienda; null = línea libre"
+        integer DeliveryNoteId FK "albarán del que se copió; no suma stock"
         varchar Description "copia del nombre o texto libre"
         integer Quantity
         bigint UnitPrice "céntimos, sin IVA"
+        text TaxRate "21 | 10 | 4 | 0"
+    }
+
+    DeliveryNotes {
+        integer Id PK
+        integer ProviderId FK
+        varchar Number "nº del proveedor; único por proveedor entre los no anulados"
+        date DeliveryDate "fecha del albarán; con índice"
+        bigint BaseAmount "céntimos; 0 si viene sin valorar"
+        bigint TaxAmount "céntimos"
+        bigint Amount "céntimos"
+        integer PurchaseInvoiceId FK "factura que lo incluye; null = pendiente de facturar"
+        varchar Notes "opcional"
+        timestamp RegistrationDate "cuándo se apuntó"
+        varchar FileName "el archivo está en InvoiceFiles"
+        boolean Canceled
+    }
+
+    DeliveryNoteLines {
+        integer Id PK
+        integer DeliveryNoteId FK
+        integer ProductId FK "artículo de Tienda; null = línea libre"
+        varchar Description "copia del nombre o texto libre"
+        integer Quantity
+        bigint UnitPrice "céntimos, sin IVA; 0 si no viene"
         text TaxRate "21 | 10 | 4 | 0"
     }
 
@@ -160,10 +195,12 @@ erDiagram
 | `SaleLines`             | `SalesLine`                                | Cada producto de una venta, con nombre y precios **copiados** del momento de la venta.                                                          |
 | `StockMovements`        | `StockMovement`                            | Historial de cada cambio de stock (ajustes, ventas, anulaciones).                                                                               |
 | `CashMovements`         | `CashMovement`                             | Dinero que entra o sale y no es una venta ni una factura de proveedor. Preparada para Ingresos y Pagos; hoy la app no la usa (los antiguos reembolsos se quitaron). |
-| `InvoiceFiles`          | `InvoiceFile`                              | Factura escaneada de un `CashMovement` o de una `PurchaseInvoice`. Tabla aparte para no cargar el archivo al listar.                            |
+| `InvoiceFiles`          | `InvoiceFile`                              | Factura o albarán escaneado de un `CashMovement`, una `PurchaseInvoice` o un `DeliveryNote`. Tabla aparte para no cargar el archivo al listar.   |
 | `Providers`             | `Provider`                                 | Proveedores habituales, para elegirlos al apuntar sus facturas. No se borran (`Active`).                                                        |
 | `PurchaseInvoices`      | `PurchaseInvoice`                          | Facturas que nos emiten los proveedores, siempre con su archivo. No se borran (`Canceled`).                                                     |
-| `PurchaseInvoiceLines`  | `PurchaseInvoiceLine`                      | Lo que viene en cada factura de proveedor: artículos de Tienda (suman stock) o líneas libres. Cada línea tiene su IVA.                          |
+| `PurchaseInvoiceLines`  | `PurchaseInvoiceLine`                      | Lo que viene en cada factura de proveedor: artículos de Tienda (suman stock), líneas libres o líneas copiadas de un albarán (no suman stock). Cada línea tiene su IVA. |
+| `DeliveryNotes`         | `DeliveryNote`                             | Albaranes de proveedores: la mercancía que llega. Suman stock, no se pagan; la factura que llega después los incluye. No se borran (`Canceled`). |
+| `DeliveryNoteLines`     | `DeliveryNoteLine`                         | Lo que viene en cada albarán. Mismas columnas que las líneas de factura (las dos heredan de `PurchaseLine`, que no es tabla).                   |
 | `OnlineShopSettings`    | `OnlineShopSettings`                       | Conexión con la tienda online (PrestaShop). Las entradas online (`OnlineTicket`) no se guardan: se leen de la tienda cada vez.                  |
 | `Issuers`               | `Issuer`                                   | Titular del museo (quien emite las facturas). Una sola fila, creada por el asistente de primera instalación.                                    |
 | `__EFMigrationsHistory` | —                                          | Migraciones aplicadas. La gestiona EF; la app solo la lee para comprobar la versión.                                                            |
@@ -185,6 +222,15 @@ erDiagram
 - **Product → PurchaseInvoiceLines (0/1 a muchos).** Al apuntar la factura, cada línea de un artículo suma
   su cantidad al stock (movimiento `Purchase` con `PurchaseInvoiceId`) y su precio pasa a ser el `CostPrice`
   del producto. Al anularla se restan con movimientos `PurchaseCancelation`.
+- **DeliveryNote → DeliveryNoteLines (1 a muchos).** Al menos una línea. Al apuntar el albarán, cada línea
+  de un artículo suma su cantidad al stock (movimiento `DeliveryNote` con `DeliveryNoteId`) y, si lleva precio,
+  pasa a ser el `CostPrice`. Al anularlo se restan con movimientos `DeliveryNoteCancelation`; no se puede
+  anular si está en una factura.
+- **PurchaseInvoice → DeliveryNotes (0/1 a muchos).** `DeliveryNotes.PurchaseInvoiceId` es la factura que lo
+  incluye. Sus líneas se copian en `PurchaseInvoiceLines` con `DeliveryNoteId` (con el precio de la factura);
+  esas líneas **no** generan movimientos de stock, porque ya los generó el albarán. Al anular la factura,
+  `PurchaseInvoiceId` vuelve a null y el albarán queda otra vez pendiente de facturar.
+- **DeliveryNote → InvoiceFile (1 a 1).** Índice único en `DeliveryNoteId`.
 - **Provider → PurchaseInvoices (1 a muchos).** `Restrict`: un proveedor con facturas no se puede borrar
   (de todas formas, nunca se borran: se desactivan).
 - `CashMovements.SalesPoint` y `PurchaseInvoices.PaymentSalesPoint` **no** son relaciones: son el enum de la
@@ -199,10 +245,10 @@ erDiagram
   (`"Ticket"`, `"Shop"`).
 - **Fechas:** `timestamp without time zone`, con la hora local del museo (`DateTime.Now`).
   Es una convención de `BaseDbContext.ConfigureConventions`.
-  Excepción: `PurchaseInvoices.InvoiceDate` y `PaymentDate` son `date` (sin hora), porque son el día
-  que pone la factura y el día del pago.
+  Excepción: `PurchaseInvoices.InvoiceDate`, `PaymentDate` y `DeliveryNotes.DeliveryDate` son `date`
+  (sin hora), porque son el día que pone el papel y el día del pago.
 - **Herencia:** una tabla por jerarquía. `Products.Type` y `Sales.SalesPoint` dicen la clase; las
   columnas de una sola clase (`Stock`, `CountsAs`, `GuidedVisit`...) son null en las filas de la otra.
 - **Ids:** columnas `identity` de PostgreSQL.
-- **Nada se borra:** productos y proveedores (`Active`), ventas y facturas de proveedores (`Canceled`) se marcan,
+- **Nada se borra:** productos y proveedores (`Active`), ventas, facturas y albaranes de proveedores (`Canceled`) se marcan,
   para conservar el historial.

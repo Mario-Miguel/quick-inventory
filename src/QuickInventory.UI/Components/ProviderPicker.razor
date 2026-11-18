@@ -1,0 +1,101 @@
+@* Elegir el proveedor de una factura o un albarán. Si no está en la lista, se crea desde aquí mismo
+   (sin cerrar el diálogo en el que está). Debajo enseña sus datos, para comprobar que coinciden
+   con los del papel. *@
+@inject IProviderService ProviderService
+@inject IDialogService Dialogs
+@inject ISnackbar Warnings
+
+<div>
+    <div class="d-flex align-start gap-2">
+        <MudAutocomplete T="Provider" Value="Provider" ValueChanged="Select"
+                         SearchFunc="Search" ToStringFunc="p => p?.LegalName"
+                         Label="Proveedor" Placeholder="Escribe el nombre o el NIF"
+                         Required="true" RequiredError="Elige el proveedor"
+                         ResetValueOnEmptyText="true" CoerceText="true" MaxItems="null"
+                         AdornmentIcon="@Icons.Material.Filled.Search" AutoFocus="true"
+                         Variant="Variant.Outlined" Class="flex-grow-1">
+            <ItemTemplate Context="p">
+                <div>
+                    <div class="product-name">@p.LegalName</div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@p.Nif</MudText>
+                </div>
+            </ItemTemplate>
+            <NoItemsTemplate>
+                <MudText Class="pa-2">No hay ningún proveedor con ese nombre. Pulsa «Nuevo proveedor».</MudText>
+            </NoItemsTemplate>
+        </MudAutocomplete>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   Class="mt-2" Style="white-space:nowrap; height:56px" OnClick="NewProvider">
+            Nuevo proveedor
+        </MudButton>
+    </div>
+
+    @if (Provider is not null)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mt-2">
+            <MudText Typo="Typo.body2"><b>NIF:</b> @Provider.Nif</MudText>
+            @if (Provider.Address is not null)
+            {
+                <MudText Typo="Typo.body2"><b>Dirección:</b> @Provider.Address</MudText>
+            }
+            @if (Provider.PhoneNumber is not null)
+            {
+                <MudText Typo="Typo.body2"><b>Teléfono:</b> @Provider.PhoneNumber</MudText>
+            }
+            @if (Provider.Email is not null)
+            {
+                <MudText Typo="Typo.body2"><b>Email:</b> @Provider.Email</MudText>
+            }
+        </MudPaper>
+    }
+</div>
+
+@code {
+    [Parameter] public Provider? Provider { get; set; }
+    [Parameter] public EventCallback<Provider?> ProviderChanged { get; set; }
+
+    private List<Provider> providers = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            providers = await ProviderService.GetProvidersAsync();
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se han podido cargar los proveedores. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    // Sin distinguir mayúsculas ni tildes; el NIF se busca sin espacios ni guiones.
+    private Task<IEnumerable<Provider>> Search(string? text, CancellationToken _)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return Task.FromResult<IEnumerable<Provider>>(providers);
+
+        var search = text.Trim();
+        var nif = TaxId.Normalize(search);
+        return Task.FromResult(providers.Where(p =>
+            CultureInfo.CurrentCulture.CompareInfo.IndexOf(p.LegalName, search, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0
+            || (nif.Length > 0 && p.Nif.Contains(nif))));
+    }
+
+    private Task Select(Provider? selected)
+    {
+        Provider = selected;
+        return ProviderChanged.InvokeAsync(selected);
+    }
+
+    private async Task NewProvider()
+    {
+        var parameters = new DialogParameters<ProviderDialog> { { x => x.Provider, new Provider() } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await Dialogs.ShowAsync<ProviderDialog>("Nuevo proveedor", parameters, options);
+        var result = await dialog.Result;
+        if (result is not { Canceled: false, Data: Provider saved }) return;
+
+        // Ya está guardado: se añade a la lista y se deja elegido (el buscador muestra su nombre).
+        providers = providers.Append(saved).OrderBy(p => p.LegalName).ToList();
+        await Select(saved);
+    }
+}
