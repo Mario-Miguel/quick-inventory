@@ -1,0 +1,226 @@
+@* Alta o edición de un evento o reserva de hora. Guarda (o borra) él mismo: si la sala ya está
+   reservada a esa hora se queda abierto para cambiarla. Al cerrarse sin cancelar, hay cambios. *@
+@inject ICalendarService CalendarService
+@inject IDialogService Dialogs
+@inject ISnackbar Warnings
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudStack Spacing="3">
+                <MudTextField T="string" @bind-Value="Event.Title" Label="¿Qué es?" Required="true"
+                              RequiredError="Escribe qué es el evento"
+                              HelperText="Por ejemplo, «Cata para el colegio San José» o «Visita con espicha»"
+                              MaxLength="CalendarEvent.MaxTitleLength" AutoFocus="@(Event.Id == 0)" Variant="Variant.Outlined" />
+
+                <div class="d-flex flex-wrap gap-4">
+                    <MudDatePicker Label="Día" Date="day" DateChanged="d => day = d" Required="true"
+                                   RequiredError="Elige el día" Variant="Variant.Outlined" Editable="false"
+                                   Class="event-field-day" />
+                    <MudSelect T="TimeOnly" Label="Empieza" Value="start" ValueChanged="StartChanged"
+                               Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter" Class="event-field-time">
+                        @foreach (var time in TimeOptions(start))
+                        {
+                            <MudSelectItem T="TimeOnly" Value="time">@time.ToString("H:mm")</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="TimeOnly" Label="Termina" @bind-Value="end"
+                               Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter" Class="event-field-time"
+                               Validation="@(new Func<TimeOnly, string?>(ValidateEnd))">
+                        @foreach (var time in TimeOptions(end).Where(t => t > start))
+                        {
+                            <MudSelectItem T="TimeOnly" Value="time">@time.ToString("H:mm")</MudSelectItem>
+                        }
+                    </MudSelect>
+                </div>
+
+                <div class="d-flex align-start gap-2">
+                    <MudSelect T="int?" Label="Sala" @bind-Value="Event.RoomId" Variant="Variant.Outlined"
+                               HelperText="Si ocupa una sala, no se podrá reservar otra cosa en ella a la misma hora"
+                               AnchorOrigin="Origin.BottomCenter">
+                        <MudSelectItem T="int?" Value="null">Sin sala</MudSelectItem>
+                        @foreach (var room in rooms)
+                        {
+                            <MudSelectItem T="int?" Value="room.Id">@RoomLabel(room)</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudTooltip Text="Añadir una sala nueva">
+                        <MudIconButton Icon="@Icons.Material.Filled.AddHome" Variant="Variant.Outlined" Size="Size.Large"
+                                       Class="mt-1" OnClick="NewRoom" aria-label="Nueva sala" />
+                    </MudTooltip>
+                </div>
+
+                <div>
+                    <MudText Typo="Typo.body2" Class="mb-2">Color (para distinguir el tipo de evento en el calendario)</MudText>
+                    <div class="event-colors" role="radiogroup" aria-label="Color">
+                        @foreach (var color in EventColors.All)
+                        {
+                            var selected = string.Equals(color.Hex, Event.Color, StringComparison.OrdinalIgnoreCase);
+                            <button type="button" role="radio" aria-checked="@(selected ? "true" : "false")"
+                                    class="event-color @(selected ? "event-color-selected" : "")"
+                                    style="background-color: @color.Hex; color: @EventColors.TextOn(color.Hex)"
+                                    title="@color.Name" aria-label="@color.Name" @onclick="() => Event.Color = color.Hex">
+                                @if (selected)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Check" />
+                                }
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-4">
+                    <MudNumericField T="int?" @bind-Value="Event.People" Label="Personas (opcional)" Min="1"
+                                     Variant="Variant.Outlined" Class="event-field-people" />
+                    <MudTextField T="string" @bind-Value="Event.Contact" Label="Quién reserva (opcional)"
+                                  HelperText="Nombre y teléfono, por ejemplo"
+                                  MaxLength="CalendarEvent.MaxContactLength" Variant="Variant.Outlined" Class="flex-grow-1" />
+                </div>
+
+                <MudTextField T="string" @bind-Value="Event.Notes" Label="Notas (opcional)" Lines="3"
+                              MaxLength="CalendarEvent.MaxNotesLength" Variant="Variant.Outlined" />
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        @if (Event.Id != 0)
+        {
+            <MudButton Size="Size.Large" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                       Disabled="saving" OnClick="Delete">
+                Borrar
+            </MudButton>
+            <MudSpacer />
+        }
+        <MudButton Size="Size.Large" OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary" Disabled="saving" OnClick="Save">
+            Guardar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    /// <summary>Copia que se edita (con Id 0 si es nuevo), con el día y las horas ya puestos.</summary>
+    [Parameter, EditorRequired] public CalendarEvent Event { get; set; } = default!;
+
+    /// <summary>Salas activas. Si el evento está en una desactivada, se añade para que se vea.</summary>
+    [Parameter] public List<Room> Rooms { get; set; } = [];
+
+    private List<Room> rooms = [];
+    private MudForm form = default!;
+    private bool saving;
+    private DateTime? day;
+    private TimeOnly start;
+    private TimeOnly end;
+
+    private static readonly TimeOnly FirstTime = new(7, 0);
+    private static readonly TimeOnly LastTime = new(23, 45);
+
+    protected override void OnInitialized()
+    {
+        rooms = Rooms.ToList();
+        if (Event.Room is { } current && rooms.All(r => r.Id != current.Id))
+            rooms.Add(current);
+
+        day = Event.Start.Date;
+        start = TimeOnly.FromDateTime(Event.Start);
+        end = TimeOnly.FromDateTime(Event.End);
+    }
+
+    /// <summary>De cuarto en cuarto de hora, de 7:00 a 23:45, más la hora actual si no es una de esas.</summary>
+    private static IEnumerable<TimeOnly> TimeOptions(TimeOnly current)
+    {
+        var times = new SortedSet<TimeOnly> { current };
+        for (var t = FirstTime; t <= LastTime && t >= FirstTime; t = t.AddMinutes(15))
+            times.Add(t);
+        return times;
+    }
+
+    // Al mover el inicio, el fin se mueve con él para mantener la duración.
+    private void StartChanged(TimeOnly value)
+    {
+        var duration = end - start;
+        start = value;
+        if (duration <= TimeSpan.Zero) duration = TimeSpan.FromHours(1);
+        var newEnd = start.Add(duration, out var wrapped);
+        end = wrapped != 0 || newEnd > LastTime ? LastTime : newEnd;
+    }
+
+    private string? ValidateEnd(TimeOnly value) =>
+        value > start ? null : "Tiene que ser después de la hora de inicio";
+
+    private static string RoomLabel(Room room) =>
+        room.Name + (room.Capacity is { } c ? $" (aforo {c})" : "") + (room.Active ? "" : " — desactivada");
+
+    private async Task NewRoom()
+    {
+        var parameters = new DialogParameters<RoomDialog> { { x => x.Room, new Room() } };
+        var dialog = await Dialogs.ShowAsync<RoomDialog>("Nueva sala", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: Room room })
+        {
+            rooms.Add(room);
+            rooms.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase));
+            Event.RoomId = room.Id;
+        }
+    }
+
+    private async Task Save()
+    {
+        await form.ValidateAsync();
+        if (!form.IsValid || day is null) return;
+
+        Event.Start = DateOnly.FromDateTime(day.Value).ToDateTime(start);
+        Event.End = DateOnly.FromDateTime(day.Value).ToDateTime(end);
+
+        saving = true;
+        try
+        {
+            var saved = await CalendarService.SaveEventAsync(Event);
+            Warnings.Add($"«{saved.Title}» guardado para el {saved.Start:dddd d 'de' MMMM}, de {saved.Start:H:mm} a {saved.End:H:mm}.", Severity.Success);
+            Dialog.Close(DialogResult.Ok(saved));
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el evento. Inténtalo de nuevo.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task Delete()
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Borrar evento",
+            $"¿Seguro que quieres borrar «{Event.Title}»? La hora quedará libre.",
+            yesText: "Borrar",
+            cancelText: "Cancelar");
+        if (confirmed != true) return;
+
+        saving = true;
+        try
+        {
+            await CalendarService.DeleteEventAsync(Event.Id);
+            Warnings.Add($"«{Event.Title}» borrado.", Severity.Success);
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido borrar el evento. Inténtalo de nuevo.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Cancel() => Dialog.Cancel();
+}

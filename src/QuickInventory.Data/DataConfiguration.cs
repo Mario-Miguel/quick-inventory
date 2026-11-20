@@ -31,6 +31,7 @@ public static class DataConfiguration
         services.AddScoped<ICustomerService, CustomerService>();
         services.AddScoped<ICustomerInvoiceService, CustomerInvoiceService>();
         services.AddScoped<IInvoiceDesignService, InvoiceDesignService>();
+        services.AddScoped<ICalendarService, CalendarService>();
         return services;
     }
 

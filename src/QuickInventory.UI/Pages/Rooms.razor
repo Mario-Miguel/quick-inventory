@@ -1,0 +1,137 @@
+@page "/rooms"
+@inject ICalendarService CalendarService
+@inject IDialogService Dialogs
+@inject ISnackbar Warnings
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    <h1 class="page-title mb-0">Salas</h1>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="NewRoom">
+        Nueva sala
+    </MudButton>
+</div>
+
+<MudText Class="mb-4">Salas que se pueden reservar en el calendario para eventos.</MudText>
+
+@if (rooms is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Class="pa-4 mb-4" Elevation="0" Outlined="true">
+        <MudSwitch T="bool" Value="showInactive" ValueChanged="ToggleInactive" Color="Color.Primary"
+                   Label="Ver también las desactivadas" />
+    </MudPaper>
+
+    <MudTable T="Room" Items="rooms" Hover="true" Striped="true" Elevation="1" Breakpoint="Breakpoint.Sm"
+              RowClassFunc="@((r, _) => r.Active ? "" : "sale-canceled-row")">
+        <HeaderContent>
+            <MudTh>Sala</MudTh>
+            <MudTh>Aforo</MudTh>
+            <MudTh Style="text-align:right">Acciones</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Sala">
+                <span class="product-name">@context.Name</span>
+                @if (!context.Active)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Class="ml-2">Desactivada</MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Aforo">@(context.Capacity?.ToString() ?? "—")</MudTd>
+            <MudTd Style="text-align:right; white-space:nowrap">
+                <MudTooltip Text="Editar">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" OnClick="() => Edit(context)" aria-label="Editar" />
+                </MudTooltip>
+                @if (context.Active)
+                {
+                    <MudTooltip Text="Desactivar (deja de salir al reservar)">
+                        <MudIconButton Icon="@Icons.Material.Filled.Block" Color="Color.Error"
+                                       OnClick="() => SetActive(context, false)" aria-label="Desactivar" />
+                    </MudTooltip>
+                }
+                else
+                {
+                    <MudTooltip Text="Volver a activar">
+                        <MudIconButton Icon="@Icons.Material.Filled.Restore" Color="Color.Primary"
+                                       OnClick="() => SetActive(context, true)" aria-label="Activar" />
+                    </MudTooltip>
+                }
+            </MudTd>
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <MudText Class="pa-4">Todavía no hay ninguna sala.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    private List<Room>? rooms;
+    private bool showInactive;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        try
+        {
+            rooms = await CalendarService.GetRoomsAsync(includeInactive: showInactive);
+        }
+        catch (Exception)
+        {
+            rooms = [];
+            Warnings.Add("No se han podido cargar las salas. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    private async Task ToggleInactive(bool value)
+    {
+        showInactive = value;
+        await Load();
+    }
+
+    private Task NewRoom() => OpenEditor(new Room(), "Nueva sala");
+
+    private Task Edit(Room room) => OpenEditor(room.Clone(), "Editar sala");
+
+    private async Task OpenEditor(Room room, string title)
+    {
+        var parameters = new DialogParameters<RoomDialog> { { x => x.Room, room } };
+        var dialog = await Dialogs.ShowAsync<RoomDialog>(title, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await Load();
+    }
+
+    private async Task SetActive(Room room, bool active)
+    {
+        if (!active)
+        {
+            var confirmed = await Dialogs.ShowMessageBoxAsync(
+                "Desactivar sala",
+                $"¿Seguro que quieres desactivar {room.Name}? Ya no se podrá reservar, pero los eventos que ya tiene se conservan.",
+                yesText: "Desactivar",
+                cancelText: "Cancelar");
+            if (confirmed != true) return;
+        }
+
+        try
+        {
+            await CalendarService.SetRoomActiveAsync(room.Id, active);
+            Warnings.Add(active ? $"{room.Name} activada." : $"{room.Name} desactivada.", Severity.Success);
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el cambio. Inténtalo de nuevo.", Severity.Error);
+        }
+        await Load();
+    }
+}

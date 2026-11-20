@@ -187,7 +187,7 @@ body {
   text-transform: uppercase;
 }
 
-/* Entradas online: calendario del mes, de lunes a domingo. */
+/* Calendario: vista de mes, de lunes a domingo. */
 .calendar {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -225,12 +225,6 @@ body {
   cursor: default;
 }
 
-.calendar-day-selected,
-.calendar-day-selected:hover {
-  border-color: var(--mud-palette-primary);
-  box-shadow: 0 0 0 2px var(--mud-palette-primary);
-}
-
 .calendar-day-number {
   font-weight: 600;
 }
@@ -243,12 +237,325 @@ body {
   align-self: flex-start;
 }
 
-.calendar-day-count {
+/* Eventos dentro de un día del mes: los primeros, recortados a una línea. */
+.calendar-day-events {
+  min-height: 110px;
+  gap: 3px;
+  overflow: hidden;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+.calendar-day-events .calendar-day-number {
+  align-self: flex-start;
+}
+
+.calendar-event {
+  display: block;
+  text-align: left;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendar-event-more {
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+
+.calendar-day-tickets {
   margin-top: auto;
   align-self: flex-end;
-  font-size: 1.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 8px;
+  border-radius: 10px;
   font-weight: 700;
-  line-height: 1;
+}
+
+.calendar-modes {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.calendar-period {
+  min-width: 300px;
+  text-align: center;
+}
+
+.calendar-period::first-letter {
+  text-transform: uppercase;
+}
+
+.calendar-legend-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+/* Calendario: rejilla de horas (vistas de semana y día). --time-grid-hour es la altura de una hora. */
+.time-grid-scroll {
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.time-grid {
+  --time-grid-hour: 64px;
+  display: grid;
+  grid-template-rows: auto var(--time-grid-height);
+}
+
+.time-grid-corner,
+.time-grid-header {
+  background: #ffffff;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.time-grid-header {
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-left: 1px solid #e5e7eb;
+  font: inherit;
+  color: inherit;
+}
+
+.time-grid-header-button {
+  cursor: pointer;
+  border-top: none;
+  border-right: none;
+}
+
+.time-grid-header-button:hover {
+  background: color-mix(in srgb, var(--mud-palette-primary) 6%, #fff);
+}
+
+.time-grid-header-title {
+  font-weight: 600;
+}
+
+.time-grid-header-title::first-letter {
+  text-transform: uppercase;
+}
+
+.time-grid-header-sub {
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+
+.time-grid-header-today .time-grid-header-title {
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--mud-palette-primary);
+  color: var(--mud-palette-primary-text);
+}
+
+.time-grid-hours {
+  position: relative;
+}
+
+.time-grid-hour-label {
+  position: absolute;
+  right: 6px;
+  transform: translateY(-50%);
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+
+.time-grid-hour-label:first-child {
+  transform: none;
+}
+
+.time-grid-column {
+  position: relative;
+  border-left: 1px solid #e5e7eb;
+}
+
+.time-grid-column-readonly {
+  background: #f9fafb;
+}
+
+/* Media hora libre: se marca al pasar por encima para que se vea que se puede reservar. */
+.time-grid-slot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: calc(var(--time-grid-hour) / 2);
+  border: none;
+  border-top: 1px dashed #f0f0f0;
+  background: transparent;
+  font: inherit;
+  padding: 2px 6px;
+  text-align: left;
+  color: transparent;
+  cursor: pointer;
+}
+
+.time-grid-slot-hour {
+  border-top: 1px solid #e5e7eb;
+}
+
+.time-grid-slot-static {
+  cursor: default;
+}
+
+button.time-grid-slot:hover {
+  background: color-mix(in srgb, var(--mud-palette-success) 12%, transparent);
+  color: var(--mud-palette-success-darken);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.time-grid-item {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow: hidden;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+
+.time-grid-item:hover {
+  z-index: 2;
+  filter: brightness(1.08);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.3);
+}
+
+.time-grid-item-static {
+  cursor: default;
+}
+
+.time-grid-item-time {
+  font-size: 0.75rem;
+  opacity: 0.9;
+}
+
+.time-grid-item-title {
+  font-weight: 700;
+}
+
+.time-grid-item-detail {
+  font-size: 0.75rem;
+  opacity: 0.9;
+}
+
+.time-grid-item-line,
+.time-grid-item-title,
+.time-grid-item-detail {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.time-grid-now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  border-top: 2px solid var(--mud-palette-error);
+  pointer-events: none;
+}
+
+/* Calendario, vista de día: huecos libres por sala y lista de eventos. */
+.free-slots-room + .free-slots-room {
+  margin-top: 12px;
+}
+
+.event-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-left: 6px solid;
+  border-radius: 6px;
+  background: #ffffff;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.event-detail:hover {
+  background: #f9fafb;
+}
+
+.event-detail-time {
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.event-detail-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.event-detail-info {
+  font-size: 0.9rem;
+}
+
+.event-detail-notes {
+  margin-top: 4px;
+  font-size: 0.9rem;
+  color: #4b5563;
+  white-space: pre-line;
+}
+
+/* Diálogo de evento: muestras de color grandes, fáciles de pulsar. */
+.event-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.event-color {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.event-color-selected {
+  box-shadow: 0 0 0 3px #fff, 0 0 0 5px #1f2937;
+}
+
+.event-field-day {
+  flex: 1 1 200px;
+}
+
+.event-field-time {
+  flex: 0 1 130px;
+}
+
+.event-field-people {
+  flex: 0 1 180px;
 }
 
 /* Tabla de horas del día: con muchos tipos de entrada hace scroll en horizontal. */

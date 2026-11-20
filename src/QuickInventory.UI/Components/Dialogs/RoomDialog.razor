@@ -1,0 +1,61 @@
+@* Alta o edición de una sala. Guarda ella misma y al cerrarse devuelve la sala guardada, con su Id. *@
+@inject ICalendarService CalendarService
+@inject ISnackbar Warnings
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudStack Spacing="3">
+                <MudTextField T="string" @bind-Value="Room.Name" Label="Nombre de la sala" Required="true"
+                              RequiredError="Escribe el nombre de la sala" HelperText="Por ejemplo, «Sala del lagar»"
+                              MaxLength="Room.MaxNameLength" AutoFocus="true" Variant="Variant.Outlined" />
+                <MudNumericField T="int?" @bind-Value="Room.Capacity" Label="Aforo (opcional)" Min="1"
+                                 HelperText="Cuántas personas caben" Variant="Variant.Outlined" />
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Size="Size.Large" OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary" Disabled="saving" OnClick="Save">
+            Guardar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    /// <summary>Copia que se edita (con Id 0 si es nueva).</summary>
+    [Parameter, EditorRequired] public Room Room { get; set; } = default!;
+
+    private MudForm form = default!;
+    private bool saving;
+
+    private async Task Save()
+    {
+        await form.ValidateAsync();
+        if (!form.IsValid) return;
+
+        saving = true;
+        try
+        {
+            var saved = await CalendarService.SaveRoomAsync(Room);
+            Warnings.Add($"Sala {saved.Name} guardada.", Severity.Success);
+            Dialog.Close(DialogResult.Ok(saved));
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar la sala. Inténtalo de nuevo.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Cancel() => Dialog.Cancel();
+}

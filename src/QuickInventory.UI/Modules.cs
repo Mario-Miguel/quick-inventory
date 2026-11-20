@@ -19,6 +19,7 @@ public static class Modules
     private static readonly SalesPoint[] TicketOfficeOnly = [SalesPoint.TicketOffice];
     private static readonly SalesPoint[] ShopOnly = [SalesPoint.Shop];
     private static readonly SalesPoint[] AdminOnly = [SalesPoint.Admin];
+    private static readonly SalesPoint[] TicketOfficeAndAdmin = [SalesPoint.TicketOffice, SalesPoint.Admin];
 
     public static readonly Module[] All =
     [
@@ -27,7 +28,7 @@ public static class Modules
         new("Cerrar caja", "Comprobación de la caja", Icons.Material.Filled.PointOfSale, "/tickets/close", TicketOfficeOnly),
         new("Cerrar caja", "Comprobación de la caja", Icons.Material.Filled.PointOfSale, "/shop/close", ShopOnly),
         new("Resumen de ventas", "Ver ventas de la taquilla", Icons.Material.Filled.ListAlt, "/tickets/summary", TicketOfficeOnly),
-        new("Entradas online", "Entradas compradas en la web, por día y hora", Icons.Material.Filled.CalendarMonth, "/tickets/online", TicketOfficeOnly, ClientFeature.PrestaShop),
+        new("Calendario", "Eventos, reservas de salas y de horas", Icons.Material.Filled.CalendarMonth, "/calendar", TicketOfficeAndAdmin),
         new("Resumen de ventas", "Ver ventas de la tienda", Icons.Material.Filled.ListAlt, "/shop/summary", ShopOnly),
         new("Inventario", "Productos, precios y unidades en almacén", Icons.Material.Filled.Inventory2, "/inventory", AdminOnly),
         new("Facturas de proveedores", "Apuntar las facturas que nos mandan", Icons.Material.Filled.Receipt, "/purchase-invoices", AdminOnly),
@@ -35,6 +36,7 @@ public static class Modules
         new("Facturas a clientes", "Facturas para colegios y organizaciones", Icons.Material.Filled.RequestQuote, "/customer-invoices", AdminOnly),
         new("Diseño de factura", "Logotipo, colores y plantilla de las facturas a clientes", Icons.Material.Filled.Palette, "/invoice-design", AdminOnly),
         new("Clientes", "Colegios y organizaciones a los que facturamos", Icons.Material.Filled.School, "/customers", AdminOnly),
+        new("Salas", "Salas que se pueden reservar para eventos", Icons.Material.Filled.MeetingRoom, "/rooms", AdminOnly),
         new("Proveedores", "Nombre, NIF y datos de contacto", Icons.Material.Filled.LocalShipping, "/providers", AdminOnly),
         new("Exportar datos", "Exportar datos de las ventas del mes", Icons.Material.Filled.Download, "/export", AdminOnly),
         new("Tienda online", "Conexión con la tienda web (PrestaShop)", Icons.Material.Filled.Language, "/online-shop", AdminOnly, ClientFeature.PrestaShop),
