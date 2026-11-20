@@ -20,7 +20,7 @@
 
 <MudText Class="mb-4">
     Eventos y reservas de hora@(OnlineEnabled ? ", y las entradas compradas en la página web" : "").
-    Pulsa una hora libre para reservarla, o un evento para cambiarlo.
+    Pulsa una hora libre para reservarla, o un evento para cambiarlo.@(OnlineEnabled ?   " Pulsa las entradas online de una hora para ver sus pedidos y marcar los que han venido." : "")
 </MudText>
 
 @* Vista (mes, semana o día) y flechas grandes para moverse. *@
@@ -224,39 +224,56 @@
                                     <thead>
                                         <tr>
                                             <th>Hora</th>
+                                            <th style="text-align:right">Pedidos</th>
                                             @foreach (var type in types)
                                             {
                                                 <th style="text-align:right">@type</th>
                                             }
                                             <th style="text-align:right">Total</th>
+                                            <th style="text-align:right">Han venido</th>
+                                            <th></th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @foreach (var hour in dayTickets.GroupBy(t => t.VisitTime).OrderBy(g => g.Key is null).ThenBy(g => g.Key))
                                         {
-                                            <tr>
+                                            var hourTickets = hour.ToList();
+                                            var hourArrived = hourTickets.Where(t => t.CheckedIn).Sum(t => t.Quantity);
+                                            <tr class="online-hours-row" @onclick="() => OpenCheckIn(hourTickets)"
+                                                title="Pulsa para marcar quién ha venido">
                                                 <td class="product-name">@(hour.Key?.ToString("HH:mm") ?? "Sin hora")</td>
+                                                <td style="text-align:right">@hour.Select(t => t.OrderId).Distinct().Count()</td>
                                                 @foreach (var type in types)
                                                 {
                                                     <td style="text-align:right">@Blank(hour.Where(t => t.Type == type).Sum(t => t.Quantity))</td>
                                                 }
                                                 <td style="text-align:right"><b>@hour.Sum(t => t.Quantity)</b></td>
+                                                <td style="text-align:right">@Blank(hourArrived)</td>
+                                                <td style="text-align:right">
+                                                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                                               StartIcon="@Icons.Material.Filled.HowToReg">
+                                                        Marcar
+                                                    </MudButton>
+                                                </td>
                                             </tr>
                                         }
                                         <tr class="online-hours-total">
                                             <td>Total</td>
+                                            <td style="text-align:right">@dayTickets.Select(t => t.OrderId).Distinct().Count()</td>
                                             @foreach (var type in types)
                                             {
                                                 <td style="text-align:right">@dayTickets.Where(t => t.Type == type).Sum(t => t.Quantity)</td>
                                             }
                                             <td style="text-align:right">@dayTickets.Sum(t => t.Quantity)</td>
+                                            <td style="text-align:right">@dayTickets.Where(t => t.CheckedIn).Sum(t => t.Quantity)</td>
+                                            <td></td>
                                         </tr>
                                     </tbody>
                                 </MudSimpleTable>
                             </div>
 
                             <MudText Typo="Typo.subtitle1" Class="mt-6 mb-2"><b>Pedidos</b></MudText>
-                            <TicketLinesTable Tickets="dayTickets" />
+                            <TicketLinesTable Tickets="dayTickets" ShowCheckIn="true" />
                         }
                     </MudPaper>
                 </MudItem>
@@ -453,7 +470,10 @@
         return new TimeGridItem(e.Start, e.End, e.Title, detail.Length == 0 ? null : detail, e.Color, e);
     }
 
-    /// <summary>Un bloque por cada hora con entradas online, con el total y los tipos.</summary>
+    /// <summary>
+    /// Un bloque por cada hora con entradas online, con el total y cuántos pedidos han venido. Su Source es
+    /// la lista de entradas de esa hora: al pulsarlo se ven sus pedidos. Si han venido todos, sale más claro.
+    /// </summary>
     private List<TimeGridItem> TicketItems(DateOnly day) =>
         TicketsOn(day)
             .Where(t => t.VisitTime is not null)
@@ -462,9 +482,13 @@
             {
                 var start = day.ToDateTime(g.Key);
                 var count = g.Sum(t => t.Quantity);
-                var types = string.Join(", ", g.GroupBy(t => t.Type).Select(t => $"{t.Sum(x => x.Quantity)} {t.Key}"));
-                return new TimeGridItem(start, start + TicketBlock, $"{count} {(count == 1 ? "entrada" : "entradas")} online",
-                    types, Client.Colors.Secondary, null);
+                var orders = g.GroupBy(t => t.OrderId).ToList();
+                var arrived = orders.Count(o => o.All(t => t.CheckedIn));
+                var done = arrived == orders.Count;
+                var title = $"{(done ? "✓ " : "")}{count} {(count == 1 ? "entrada" : "entradas")} online";
+                var detail = $"{orders.Count} {(orders.Count == 1 ? "pedido" : "pedidos")}"
+                             + (arrived > 0 && !done ? $", han venido {arrived}" : done ? ", han venido" : "");
+                return new TimeGridItem(start, start + TicketBlock, title, detail, Client.Colors.Secondary, g.ToList(), done);
             })
             .ToList();
 
@@ -474,8 +498,10 @@
         var dayTickets = TicketsOn(day);
         var total = dayTickets.Sum(t => t.Quantity);
         if (total == 0) return null;
-        var untimed = dayTickets.Where(t => t.VisitTime is null).Sum(t => t.Quantity);
-        return $"{total} entradas online" + (untimed > 0 ? $" ({untimed} sin hora)" : "");
+        var orders = dayTickets.Select(t => t.OrderId).Distinct().Count();
+        var untimed = dayTickets.Where(t => t.VisitTime is null).Select(t => t.OrderId).Distinct().Count();
+        return $"{orders} {(orders == 1 ? "pedido" : "pedidos")} online, {total} entradas"
+               + (untimed > 0 ? $" ({untimed} sin hora)" : "");
     }
 
     private List<TimeGridColumn> WeekColumns() =>
@@ -566,8 +592,31 @@
 
     private Task SlotClicked(TimeGridSlot slot) => OpenEvent(NewAt(slot.Start, slot.Column.RoomId), NewTitle);
 
-    private Task ItemClicked(TimeGridItem item) =>
-        item.Source is CalendarEvent e ? EditEvent(e) : Task.CompletedTask;
+    private Task ItemClicked(TimeGridItem item) => item.Source switch
+    {
+        CalendarEvent e => EditEvent(e),
+        List<OnlineTicket> hourTickets => OpenCheckIn(hourTickets),
+        _ => Task.CompletedTask,
+    };
+
+    // --- Entradas online que han venido ---
+
+    /// <summary>
+    /// Abre el diálogo con los pedidos de una hora (bloque de la rejilla o fila de la tabla de la vista día).
+    /// El diálogo guarda y cambia CheckedInAt en estas mismas entradas: al volver basta con repintar,
+    /// sin leer otra vez la tienda.
+    /// </summary>
+    private async Task OpenCheckIn(List<OnlineTicket> hourTickets)
+    {
+        var first = hourTickets[0];
+        var oneOrder = hourTickets.All(t => t.OrderId == first.OrderId);
+        var title = (oneOrder ? $"Pedido de {first.DisplayName}, {first.VisitDay:dddd d 'de' MMMM}" : $"Pedidos online del {first.VisitDay:dddd d 'de' MMMM}")
+                    + (first.VisitTime is { } time ? $" a las {time:H:mm}" : ", sin hora");
+        var parameters = new DialogParameters<OnlineTicketsCheckInDialog> { { x => x.Tickets, hourTickets } };
+        var dialog = await Dialogs.ShowAsync<OnlineTicketsCheckInDialog>(title, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        await dialog.Result;
+    }
 
     // Se edita una copia: si se cancela, el calendario no cambia.
     private Task EditEvent(CalendarEvent e) => OpenEvent(e.Clone(), "Editar evento");

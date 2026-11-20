@@ -1,0 +1,135 @@
+@* Pedidos online de una hora (o uno solo): se marca cada pedido cuando la gente llega al museo. Guarda al pulsar
+   y cambia CheckedInAt en las mismas entradas que recibe, así que quien lo abre solo tiene que repintar. *@
+@inject IOnlineTicketService OnlineTicketService
+@inject ISnackbar Warnings
+
+<MudDialog>
+    <DialogContent>
+        <div class="d-flex align-center flex-wrap gap-3 mb-4">
+            <MudText Typo="Typo.h5">
+                @if (Orders.Count == 1)
+                {
+                    <b>@Total</b> @(Total == 1 ? "entrada" : "entradas")
+                }
+                else
+                {
+                    <span>Han venido <b>@ArrivedOrders</b> de <b>@Orders.Count</b> pedidos</span>
+                }
+            </MudText>
+            <MudSpacer />
+            @if (Orders.Count > 1 && ArrivedOrders < Orders.Count)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" Disabled="saving"
+                           StartIcon="@Icons.Material.Filled.DoneAll" OnClick="() => Set(Tickets, true)">
+                    Han venido todos
+                </MudButton>
+            }
+        </div>
+
+        @if (Orders.Count > SearchFrom)
+        {
+            <MudTextField T="string" @bind-Value="search" Immediate="true" Label="Buscar"
+                          HelperText="Escribe el nombre de quien compró o la referencia del pedido"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Variant="Variant.Outlined" Clearable="true" Class="mb-3" />
+        }
+
+        <div class="checkin-list">
+            @foreach (var order in VisibleOrders)
+            {
+                var checkedIn = order.All(t => t.CheckedIn);
+                var people = order.Sum(t => t.Quantity);
+                <div class="checkin-order @(checkedIn ? "checkin-order-done" : "")">
+                    <div class="checkin-order-info">
+                        <span class="product-name">@order.First().DisplayName</span>
+                        <span>@string.Join(", ", order.GroupBy(t => t.Type).Select(g => $"{g.Sum(t => t.Quantity)} × {g.Key}"))</span>
+                        @if (checkedIn)
+                        {
+                            <span class="mud-text-secondary">Llegaron a las @order.Max(t => t.CheckedInAt)!.Value.ToString("H:mm")</span>
+                        }
+                    </div>
+                    <MudText Typo="Typo.h6" Class="checkin-order-people">@people</MudText>
+                    @if (checkedIn)
+                    {
+                        <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Large" Disabled="saving"
+                                   OnClick="() => Set(order.ToList(), false)">
+                            Deshacer
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" Disabled="saving"
+                                   StartIcon="@Icons.Material.Filled.Check" OnClick="() => Set(order.ToList(), true)">
+                            Ha venido
+                        </MudButton>
+                    }
+                </div>
+            }
+            @if (!VisibleOrders.Any())
+            {
+                <MudText>No hay ningún pedido con «@search» a esta hora.</MudText>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary" OnClick="Close">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    /// <summary>Líneas de uno o varios pedidos de un día y una hora.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<OnlineTicket> Tickets { get; set; } = [];
+
+    /// <summary>Con más pedidos que estos se enseña el buscador.</summary>
+    private const int SearchFrom = 5;
+
+    private string? search;
+    private bool saving;
+    private bool changed;
+
+    private List<IGrouping<int, OnlineTicket>> Orders =>
+        Tickets.GroupBy(t => t.OrderId).OrderBy(g => g.All(t => t.CheckedIn)).ThenBy(g => g.First().DisplayName, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+    private IEnumerable<IGrouping<int, OnlineTicket>> VisibleOrders =>
+        string.IsNullOrWhiteSpace(search)
+            ? Orders
+            : Orders.Where(o => Contains(o.First().ClientName) || Contains(o.First().OrderReference));
+
+    /// <summary>Sin distinguir mayúsculas ni tildes, como el resto de buscadores.</summary>
+    private bool Contains(string text) =>
+        CultureInfo.CurrentCulture.CompareInfo.IndexOf(text, search!.Trim(),
+            CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0;
+
+    private int Total => Tickets.Sum(t => t.Quantity);
+    private int ArrivedOrders => Orders.Count(o => o.All(t => t.CheckedIn));
+
+    private async Task Set(IReadOnlyList<OnlineTicket> tickets, bool checkedIn)
+    {
+        saving = true;
+        try
+        {
+            await OnlineTicketService.SetCheckedInAsync(tickets, checkedIn);
+            changed = true;
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar. Inténtalo de nuevo.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Close()
+    {
+        if (changed) Dialog.Close(DialogResult.Ok(true));
+        else Dialog.Cancel();
+    }
+}

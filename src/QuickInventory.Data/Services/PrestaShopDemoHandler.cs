@@ -26,6 +26,9 @@ internal sealed class PrestaShopDemoHandler : HttpMessageHandler
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var query = Query(request.RequestUri!);
+        if (request.RequestUri!.AbsolutePath.EndsWith("/customers", StringComparison.Ordinal))
+            return Task.FromResult(Json(Customers(query)));
+
         IEnumerable<Order> orders = AllOrders();
 
         if (query.TryGetValue("filter[date_add]", out var interval))
@@ -41,9 +44,37 @@ internal sealed class PrestaShopDemoHandler : HttpMessageHandler
         var list = orders.ToList();
         // Como PrestaShop: sin resultados devuelve [] en vez de {"orders": []}.
         var json = list.Count == 0 ? "[]" : JsonSerializer.Serialize(new { orders = list.Select(ToJson) });
-        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        return Task.FromResult(Json(json));
+    }
+
+    private static HttpResponseMessage Json(string json) => new(HttpStatusCode.OK)
+    {
+        Content = new StringContent(json, Encoding.UTF8, "application/json"),
+    };
+
+    private static readonly string[] FirstNames =
+        ["María", "José", "Carmen", "Manuel", "Ana", "David", "Lucía", "Javier", "Elena", "Pablo", "Laura", "Sergio",
+         "Marta", "Daniel", "Paula", "Alejandro", "Sara", "Adrián", "Cristina", "Iván", "Noelia", "Rubén"];
+    private static readonly string[] LastNames =
+        ["García", "Fernández", "González", "Rodríguez", "López", "Martínez", "Suárez", "Álvarez", "Menéndez", "Díaz",
+         "Pérez", "Alonso", "Iglesias", "Sánchez", "Gutiérrez", "Rubio", "Prieto", "Fombona", "Cuervo", "Llaneza"];
+
+    /// <summary>Clientes pedidos en filter[id] ("[3|8|15]"), con un nombre que sale siempre igual de su id.</summary>
+    private static string Customers(Dictionary<string, string> query)
+    {
+        var ids = query.GetValueOrDefault("filter[id]", "").Trim('[', ']')
+            .Split('|', StringSplitOptions.RemoveEmptyEntries)
+            .Select(int.Parse)
+            .ToList();
+        if (ids.Count == 0) return "[]";
+        return JsonSerializer.Serialize(new
         {
-            Content = new StringContent(json, Encoding.UTF8, "application/json"),
+            customers = ids.Select(id => new Dictionary<string, string>
+            {
+                ["id"] = id.ToString(CultureInfo.InvariantCulture),
+                ["firstname"] = FirstNames[id % FirstNames.Length],
+                ["lastname"] = $"{LastNames[id * 7 % LastNames.Length]} {LastNames[id * 13 % LastNames.Length]}",
+            }),
         });
     }
 
@@ -54,7 +85,7 @@ internal sealed class PrestaShopDemoHandler : HttpMessageHandler
             .ToDictionary(p => Uri.UnescapeDataString(p[0]), p => p.Length > 1 ? Uri.UnescapeDataString(p[1]) : "");
 
     private sealed record Line(int ProductId, string Name, int Quantity);
-    private sealed record Order(int Id, string Reference, DateTime Date, bool Paid, List<Line> Lines);
+    private sealed record Order(int Id, string Reference, DateTime Date, bool Paid, List<Line> Lines, int CustomerId);
 
     private static List<Order> AllOrders()
     {
@@ -84,7 +115,9 @@ internal sealed class PrestaShopDemoHandler : HttpMessageHandler
                 Date: date,
                 // Alguno queda pendiente de pago (transferencia sin hacer): no debe contar.
                 Paid: random.NextDouble() > 0.06,
-                Lines: LinesOf(random, day));
+                Lines: LinesOf(random, day),
+                // Sin usar el Random, para que el resto de pedidos de ejemplo no cambie.
+                CustomerId: 1 + (day.DayNumber * 7 + i) % 500);
         }
     }
 
@@ -124,6 +157,7 @@ internal sealed class PrestaShopDemoHandler : HttpMessageHandler
     {
         ["id"] = order.Id.ToString(CultureInfo.InvariantCulture),
         ["reference"] = order.Reference,
+        ["id_customer"] = order.CustomerId.ToString(CultureInfo.InvariantCulture),
         ["date_add"] = order.Date.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
         ["valid"] = order.Paid ? "1" : "0",
         ["associations"] = new

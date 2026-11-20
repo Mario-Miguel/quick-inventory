@@ -627,3 +627,46 @@ tr.delivery-note-row td {
   max-height: 80px;
   max-width: 100%;
 }
+
+/* Diálogo de entradas online de una hora: un pedido por fila, con el botón «Ha venido». */
+.checkin-list {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.checkin-order {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid #e5e7eb;
+  border-left: 6px solid #d1d5db;
+  border-radius: 6px;
+}
+
+.checkin-order-done {
+  border-left-color: #16a34a;
+  background: #f0fdf4;
+}
+
+.checkin-order-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.checkin-order-people {
+  min-width: 2.5em;
+  text-align: right;
+}
+
+.online-hours-row {
+  cursor: pointer;
+}
+
+/* Bloque ya atendido (pedido online que ha venido): más claro, para ver de un vistazo lo que falta. */
+.time-grid-item-done {
+  opacity: 0.5;
+}

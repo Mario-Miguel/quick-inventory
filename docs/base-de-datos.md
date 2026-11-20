@@ -263,9 +263,16 @@ erDiagram
     OnlineShopSettings {
         INTEGER Id PK "una sola fila"
         TEXT Url "dirección de PrestaShop"
-        TEXT ApiKey "clave del Webservice (solo GET en orders)"
+        TEXT ApiKey "clave del Webservice (solo GET en orders y customers)"
         TEXT TicketProductIds "ids separados por comas; vacío = todos"
         INTEGER DaysInAdvance "antelación máxima de compra"
+    }
+
+    OnlineTicketCheckIns {
+        integer Id PK
+        integer OrderId "pedido de PrestaShop (único con OrderLineId)"
+        integer OrderLineId "línea del pedido en PrestaShop"
+        timestamp CheckedInAt "cuándo se marcó que habían venido"
     }
 ```
 
@@ -292,6 +299,7 @@ erDiagram
 | `Rooms`                 | `Room`                                     | Salas que se pueden reservar en el calendario. No se borran (`Active`).                                                                          |
 | `CalendarEvents`        | `CalendarEvent`                            | Eventos y reservas de hora del calendario (eventos en una sala, visitas con entrada especial...). Solo guardan la hora: no tienen relación con ventas ni entradas. Se borran de verdad. |
 | `OnlineShopSettings`    | `OnlineShopSettings`                       | Conexión con la tienda online (PrestaShop). Las entradas online (`OnlineTicket`) no se guardan: se leen de la tienda cada vez.                  |
+| `OnlineTicketCheckIns`  | `OnlineTicketCheckIn`                      | Líneas de pedidos online cuyas entradas ya han venido al museo (se marcan desde el calendario). Sin claves ajenas: el pedido solo está en PrestaShop. Desmarcar borra la fila. |
 | `Issuers`               | `Issuer`                                   | Titular del museo (quien emite las facturas). Una sola fila, creada por el asistente de primera instalación.                                    |
 | `__EFMigrationsHistory` | —                                          | Migraciones aplicadas. La gestiona EF; la app solo la lee para comprobar la versión.                                                            |
 

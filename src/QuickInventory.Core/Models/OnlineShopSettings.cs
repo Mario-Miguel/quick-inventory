@@ -10,7 +10,7 @@ public class OnlineShopSettings
     /// <summary>Dirección de la tienda, por ejemplo "https://tienda.museodelasidra.com".</summary>
     public string Url { get; set; } = "";
     /// <summary>
-    /// Clave del Webservice de PrestaShop. Basta con que tenga permiso de lectura (GET) en "orders".
+    /// Clave del Webservice de PrestaShop. Basta con que tenga permiso de lectura (GET) en "orders" y, para ver el nombre de quien compra, en "customers".
     /// </summary>
     public string ApiKey { get; set; } = "";
     /// <summary>

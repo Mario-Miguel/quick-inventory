@@ -14,7 +14,9 @@ public sealed record TimeGridColumn(string Header, DateOnly Day, IReadOnlyList<T
 
 /// <summary>Bloque de <see cref="TimeGrid"/>: un evento o las entradas online de una hora.</summary>
 /// <param name="Source">Objeto original (p. ej. el <c>CalendarEvent</c>), para saber qué se ha pulsado.</param>
-public sealed record TimeGridItem(DateTime Start, DateTime End, string Title, string? Detail, string Color, object? Source);
+/// <param name="Done">Se dibuja más claro (p. ej. una hora en la que ya han venido todos los pedidos online).</param>
+public sealed record TimeGridItem(DateTime Start, DateTime End, string Title, string? Detail, string Color, object? Source,
+    bool Done = false);
 
 /// <summary>Hora libre pulsada en <see cref="TimeGrid"/>.</summary>
 public sealed record TimeGridSlot(TimeGridColumn Column, DateTime Start);

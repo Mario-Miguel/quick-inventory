@@ -72,14 +72,14 @@
                     var label = $"{item.Start:H:mm}–{item.End:H:mm} {item.Title}";
                     if (OnItemClick.HasDelegate && item.Source is not null)
                     {
-                        <button type="button" class="time-grid-item" style="@style" title="@label" aria-label="@label"
+                        <button type="button" class="time-grid-item @(item.Done ? "time-grid-item-done" : "")" style="@style" title="@label" aria-label="@label"
                                 @onclick="() => OnItemClick.InvokeAsync(item)">
                             <ItemContent Item="item" Short="height < 40" />
                         </button>
                     }
                     else
                     {
-                        <div class="time-grid-item time-grid-item-static" style="@style" title="@label">
+                        <div class="time-grid-item time-grid-item-static @(item.Done ? "time-grid-item-done" : "")" style="@style" title="@label">
                             <ItemContent Item="item" Short="height < 40" />
                         </div>
                     }

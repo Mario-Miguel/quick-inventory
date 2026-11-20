@@ -14,6 +14,7 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
     public DbSet<CashMovement> CashMovements => Set<CashMovement>();
     public DbSet<InvoiceFile> InvoiceFiles => Set<InvoiceFile>();
     public DbSet<OnlineShopSettings> OnlineShopSettings => Set<OnlineShopSettings>();
+    public DbSet<OnlineTicketCheckIn> OnlineTicketCheckIns => Set<OnlineTicketCheckIn>();
     public DbSet<Issuer> Issuers => Set<Issuer>();
     public DbSet<InvoiceSeries> InvoiceSeries => Set<InvoiceSeries>();
     public DbSet<Provider> Providers => Set<Provider>();
@@ -121,6 +122,12 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
             e.Property(s => s.Url).HasMaxLength(300);
             e.Property(s => s.ApiKey).HasMaxLength(100);
             e.Property(s => s.TicketProductIds).HasMaxLength(500);
+        });
+
+        // Una fila por cada línea de pedido online que ya ha venido al museo.
+        model.Entity<OnlineTicketCheckIn>(e =>
+        {
+            e.HasIndex(c => new { c.OrderId, c.OrderLineId }).IsUnique();
         });
 
         // Una sola fila: la crea el asistente de la primera instalación.

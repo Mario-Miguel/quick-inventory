@@ -605,6 +605,31 @@ namespace QuickInventory.Data.Migrations
                     b.ToTable("OnlineShopSettings");
                 });
 
+            modelBuilder.Entity("QuickInventory.Core.Models.OnlineTicketCheckIn", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CheckedInAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OrderLineId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId", "OrderLineId")
+                        .IsUnique();
+
+                    b.ToTable("OnlineTicketCheckIns");
+                });
+
             modelBuilder.Entity("QuickInventory.Core.Models.Product", b =>
                 {
                     b.Property<int>("Id")
