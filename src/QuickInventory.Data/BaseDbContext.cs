@@ -14,6 +14,7 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
     public DbSet<CashMovement> CashMovements => Set<CashMovement>();
     public DbSet<InvoiceFile> InvoiceFiles => Set<InvoiceFile>();
     public DbSet<OnlineShopSettings> OnlineShopSettings => Set<OnlineShopSettings>();
+    public DbSet<OnlineTicketCheckIn> OnlineTicketCheckIns => Set<OnlineTicketCheckIn>();
     public DbSet<Issuer> Issuers => Set<Issuer>();
     public DbSet<InvoiceSeries> InvoiceSeries => Set<InvoiceSeries>();
     public DbSet<Provider> Providers => Set<Provider>();
@@ -26,6 +27,8 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
     public DbSet<CustomerInvoice> CustomerInvoices => Set<CustomerInvoice>();
     public DbSet<CustomerInvoiceLine> CustomerInvoiceLines => Set<CustomerInvoiceLine>();
     public DbSet<InvoiceDesign> InvoiceDesigns => Set<InvoiceDesign>();
+    public DbSet<Room> Rooms => Set<Room>();
+    public DbSet<CalendarEvent> CalendarEvents => Set<CalendarEvent>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configuration)
     {
@@ -121,6 +124,12 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
             e.Property(s => s.TicketProductIds).HasMaxLength(500);
         });
 
+        // Una fila por cada línea de pedido online que ya ha venido al museo.
+        model.Entity<OnlineTicketCheckIn>(e =>
+        {
+            e.HasIndex(c => new { c.OrderId, c.OrderLineId }).IsUnique();
+        });
+
         // Una sola fila: la crea el asistente de la primera instalación.
         model.Entity<Issuer>(e =>
         {
@@ -204,6 +213,25 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
             e.Property(d => d.LogoFileName).HasMaxLength(InvoiceDesign.MaxFileNameLength);
             e.Property(d => d.CustomTemplateFileName).HasMaxLength(InvoiceDesign.MaxFileNameLength);
             e.Ignore(d => d.HasCustomTemplate);
+        });
+
+        model.Entity<Room>(e =>
+        {
+            e.Property(r => r.Name).HasMaxLength(Room.MaxNameLength).IsRequired();
+            e.HasIndex(r => r.Name).IsUnique();
+        });
+
+        model.Entity<CalendarEvent>(e =>
+        {
+            e.Property(c => c.Title).HasMaxLength(CalendarEvent.MaxTitleLength).IsRequired();
+            e.Property(c => c.Color).HasMaxLength(7).IsRequired();
+            e.Property(c => c.Contact).HasMaxLength(CalendarEvent.MaxContactLength);
+            e.Property(c => c.Notes).HasMaxLength(CalendarEvent.MaxNotesLength);
+            e.Ignore(c => c.Day);
+            // Las salas no se borran (se desactivan), así que sus eventos nunca se quedan sin ella.
+            e.HasOne(c => c.Room).WithMany().HasForeignKey(c => c.RoomId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(c => c.Start);
+            e.ToTable(t => t.HasCheckConstraint("CK_CalendarEvents_FinDespuesDeInicio", "\"End\" > \"Start\""));
         });
 
         model.Entity<PurchaseInvoice>(e =>
@@ -290,4 +318,7 @@ internal static class AdvisoryLocks
     /// solo tiene que ser el mismo en todos los sitios y no repetirse con otros bloqueos. No cambiarlo.
     /// </summary>
     public const long Invoicing = 1;
+
+    /// <summary>Bloqueo de reservas de salas: mientras se comprueba si una sala está libre y se guarda el evento.</summary>
+    public const long Calendar = 2;
 }

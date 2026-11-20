@@ -30,6 +30,7 @@ erDiagram
     DeliveryNotes |o--o{ PurchaseInvoiceLines : "copiadas en"
     Customers ||--o{ CustomerInvoices : "le facturamos"
     CustomerInvoices ||--|{ CustomerInvoiceLines : "tiene"
+    Rooms |o--o{ CalendarEvents : "se reserva en"
 
     Products {
         integer Id PK
@@ -240,12 +241,38 @@ erDiagram
         varchar Address "opcional"
     }
 
+    Rooms {
+        integer Id PK
+        varchar Name "único"
+        integer Capacity "aforo, opcional"
+        boolean Active "nunca se borra"
+    }
+
+    CalendarEvents {
+        integer Id PK
+        varchar Title
+        timestamp Start "con índice"
+        timestamp End "después de Start (check), mismo día"
+        integer RoomId FK "opcional; sin solapes en la misma sala"
+        varchar Color "#RRGGBB, tipo de evento"
+        integer People "opcional"
+        varchar Contact "quién reserva, opcional"
+        varchar Notes "opcional"
+    }
+
     OnlineShopSettings {
         INTEGER Id PK "una sola fila"
         TEXT Url "dirección de PrestaShop"
-        TEXT ApiKey "clave del Webservice (solo GET en orders)"
+        TEXT ApiKey "clave del Webservice (solo GET en orders y customers)"
         TEXT TicketProductIds "ids separados por comas; vacío = todos"
         INTEGER DaysInAdvance "antelación máxima de compra"
+    }
+
+    OnlineTicketCheckIns {
+        integer Id PK
+        integer OrderId "pedido de PrestaShop (único con OrderLineId)"
+        integer OrderLineId "línea del pedido en PrestaShop"
+        timestamp CheckedInAt "cuándo se marcó que habían venido"
     }
 ```
 
@@ -269,7 +296,10 @@ erDiagram
 | `CustomerInvoices`      | `CustomerInvoice`                          | Facturas completas (`F1`) que emite el museo. Llevan copiados los datos del titular y del cliente. No se cambian ni se borran.                  |
 | `CustomerInvoiceLines`  | `CustomerInvoiceLine`                      | Conceptos de cada factura a cliente, con precio sin IVA y su IVA o su exención.                                                                 |
 | `InvoiceDesigns`        | `InvoiceDesign`                            | Diseño de las facturas a clientes (una sola fila): disposición, colores, pie, logotipo o plantilla HTML importada. Solo cambia su aspecto al imprimirlas; los datos de cada factura están en `CustomerInvoices`. Ver `InvoiceTemplate`. |
+| `Rooms`                 | `Room`                                     | Salas que se pueden reservar en el calendario. No se borran (`Active`).                                                                          |
+| `CalendarEvents`        | `CalendarEvent`                            | Eventos y reservas de hora del calendario (eventos en una sala, visitas con entrada especial...). Solo guardan la hora: no tienen relación con ventas ni entradas. Se borran de verdad. |
 | `OnlineShopSettings`    | `OnlineShopSettings`                       | Conexión con la tienda online (PrestaShop). Las entradas online (`OnlineTicket`) no se guardan: se leen de la tienda cada vez.                  |
+| `OnlineTicketCheckIns`  | `OnlineTicketCheckIn`                      | Líneas de pedidos online cuyas entradas ya han venido al museo (se marcan desde el calendario). Sin claves ajenas: el pedido solo está en PrestaShop. Desmarcar borra la fila. |
 | `Issuers`               | `Issuer`                                   | Titular del museo (quien emite las facturas). Una sola fila, creada por el asistente de primera instalación.                                    |
 | `__EFMigrationsHistory` | —                                          | Migraciones aplicadas. La gestiona EF; la app solo la lee para comprobar la versión.                                                            |
 
@@ -306,6 +336,9 @@ erDiagram
   (`AdvisoryLocks.Invoicing`), y la fecha no puede ser anterior a la de la última factura de la serie.
 - **Provider → PurchaseInvoices (1 a muchos).** `Restrict`: un proveedor con facturas no se puede borrar
   (de todas formas, nunca se borran: se desactivan).
+- **Room → CalendarEvents (0/1 a muchos).** `Restrict`. Una sala no puede tener dos eventos que se
+  solapen: lo comprueba `CalendarService.SaveEventAsync` con el bloqueo `AdvisoryLocks.Calendar`
+  (no hay restricción en la base). Los eventos sin sala no se comprueban.
 - `CashMovements.SalesPoint` y `PurchaseInvoices.PaymentSalesPoint` **no** son relaciones: son el enum de la
   caja (Taquilla/Tienda). Las facturas de proveedores pagadas en efectivo con una caja se restan al cerrarla
   el día del pago (`PaymentDate`).

@@ -1,0 +1,9 @@
+@* Leyenda bajo la vista semanal: de qué color salen las entradas online. *@
+<div class="d-flex align-center gap-2 mt-2">
+    <span class="calendar-legend-swatch" style="background-color: @Color"></span>
+    <MudText Typo="Typo.body2">Entradas compradas en la web (pulsa una hora para ver sus pedidos y marcar los que han venido, o el día para verlas en detalle)</MudText>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Color { get; set; } = "";
+}

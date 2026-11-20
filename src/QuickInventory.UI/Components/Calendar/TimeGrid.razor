@@ -1,0 +1,181 @@
+@* Rejilla de horas con una columna por día o por sala. Los bloques que coinciden en el tiempo se
+   ponen uno al lado del otro. Las medias horas libres se pueden pulsar para crear un evento. *@
+
+<div class="time-grid-scroll">
+    <div class="time-grid" style="@GridStyle">
+        <div class="time-grid-corner"></div>
+        @foreach (var column in Columns)
+        {
+            var today = column.Day == Today && ShowToday && HighlightTodayHeader;
+            if (OnHeaderClick.HasDelegate)
+            {
+                <button type="button" class="time-grid-header time-grid-header-button @(today ? "time-grid-header-today" : "")"
+                        @onclick="() => OnHeaderClick.InvokeAsync(column)" aria-label="@($"Ver {column.Header} en detalle")">
+                    <span class="time-grid-header-title">@column.Header</span>
+                    @if (column.SubHeader is not null)
+                    {
+                        <span class="time-grid-header-sub">@column.SubHeader</span>
+                    }
+                </button>
+            }
+            else
+            {
+                <div class="time-grid-header @(today ? "time-grid-header-today" : "")">
+                    <span class="time-grid-header-title">@column.Header</span>
+                    @if (column.SubHeader is not null)
+                    {
+                        <span class="time-grid-header-sub">@column.SubHeader</span>
+                    }
+                </div>
+            }
+        }
+
+        <div class="time-grid-hours">
+            @for (var hour = FirstHour; hour < LastHour; hour++)
+            {
+                <div class="time-grid-hour-label" style="top: @Px((hour - FirstHour) * 60)">@($"{hour}:00")</div>
+            }
+        </div>
+
+        @foreach (var column in Columns)
+        {
+            <div class="time-grid-column @(column.AllowsNew ? "" : "time-grid-column-readonly")">
+                @if (column.AllowsNew && OnSlotClick.HasDelegate)
+                {
+                    @for (var minute = FirstHour * 60; minute < LastHour * 60; minute += 30)
+                    {
+                        var start = column.Day.ToDateTime(TimeOnly.MinValue).AddMinutes(minute);
+                        <button type="button" class="time-grid-slot @(minute % 60 == 0 ? "time-grid-slot-hour" : "")"
+                                style="top: @Px(minute - FirstHour * 60)"
+                                @onclick="() => OnSlotClick.InvokeAsync(new TimeGridSlot(column, start))"
+                                aria-label="@($"Reservar {column.Header} a las {start:H:mm}")">
+                            <span>+ @start.ToString("H:mm")</span>
+                        </button>
+                    }
+                }
+                else
+                {
+                    @for (var minute = FirstHour * 60; minute < LastHour * 60; minute += 30)
+                    {
+                        <div class="time-grid-slot time-grid-slot-static @(minute % 60 == 0 ? "time-grid-slot-hour" : "")"
+                             style="top: @Px(minute - FirstHour * 60)"></div>
+                    }
+                }
+
+                @foreach (var (item, lane, lanes) in Layout(column))
+                {
+                    var top = Minutes(column.Day, item.Start);
+                    var height = Math.Max(Minutes(column.Day, item.End) - top, 22);
+                    var style = $"top: {Px(top)}; height: {Px(height)}; "
+                                + $"left: calc({Pct(100.0 * lane / lanes)} + 2px); width: calc({Pct(100.0 / lanes)} - 4px); "
+                                + $"background-color: {item.Color}; color: {EventColors.TextOn(item.Color)}";
+                    var label = $"{item.Start:H:mm}–{item.End:H:mm} {item.Title}";
+                    if (OnItemClick.HasDelegate && item.Source is not null)
+                    {
+                        <button type="button" class="time-grid-item @(item.Done ? "time-grid-item-done" : "")" style="@style" title="@label" aria-label="@label"
+                                @onclick="() => OnItemClick.InvokeAsync(item)">
+                            <ItemContent Item="item" Short="height < 40" />
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="time-grid-item time-grid-item-static @(item.Done ? "time-grid-item-done" : "")" style="@style" title="@label">
+                            <ItemContent Item="item" Short="height < 40" />
+                        </div>
+                    }
+                }
+
+                @if (ShowToday && column.Day == Today && NowMinutes is { } now)
+                {
+                    <div class="time-grid-now" style="top: @Px(now)"></div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TimeGridColumn> Columns { get; set; } = [];
+    /// <summary>Primera hora que se ve (la fila de arriba).</summary>
+    [Parameter] public int FirstHour { get; set; } = 9;
+    /// <summary>Hora en la que termina la rejilla (no incluida).</summary>
+    [Parameter] public int LastHour { get; set; } = 20;
+    /// <summary>Resalta el día de hoy y dibuja una línea en la hora actual.</summary>
+    [Parameter] public bool ShowToday { get; set; } = true;
+    /// <summary>Marca la cabecera de hoy. En la vista de un solo día (columnas por sala) no tiene sentido.</summary>
+    [Parameter] public bool HighlightTodayHeader { get; set; } = true;
+    /// <summary>Ancho mínimo de cada columna, para que en semana no se aprieten demasiado.</summary>
+    [Parameter] public int MinColumnWidth { get; set; } = 120;
+
+    [Parameter] public EventCallback<TimeGridSlot> OnSlotClick { get; set; }
+    [Parameter] public EventCallback<TimeGridItem> OnItemClick { get; set; }
+    [Parameter] public EventCallback<TimeGridColumn> OnHeaderClick { get; set; }
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    private string GridStyle =>
+        $"grid-template-columns: 56px repeat({Columns.Count}, minmax({MinColumnWidth}px, 1fr)); "
+        + $"--time-grid-height: {Px((LastHour - FirstHour) * 60)}";
+
+    private double? NowMinutes
+    {
+        get
+        {
+            var now = DateTime.Now;
+            var minutes = (now.Hour - FirstHour) * 60 + now.Minute;
+            return minutes < 0 || now.Hour >= LastHour ? null : minutes;
+        }
+    }
+
+    /// <summary>Minutos desde la primera hora de la rejilla, sin salirse de ella.</summary>
+    private double Minutes(DateOnly day, DateTime time)
+    {
+        var minutes = (time - day.ToDateTime(new TimeOnly(FirstHour, 0))).TotalMinutes;
+        return Math.Clamp(minutes, 0, (LastHour - FirstHour) * 60);
+    }
+
+    // 1 minuto = 1 px multiplicado por la variable CSS de altura por hora (ver app.css).
+    private static string Px(double minutes) =>
+        $"calc(var(--time-grid-hour) * {(minutes / 60).ToString("0.####", CultureInfo.InvariantCulture)})";
+
+    private static string Pct(double value) => value.ToString("0.####", CultureInfo.InvariantCulture) + "%";
+
+    /// <summary>
+    /// Reparte los bloques en carriles: los que coinciden en el tiempo van uno al lado del otro y todos
+    /// los de un mismo grupo ocupan el mismo ancho.
+    /// </summary>
+    private static List<(TimeGridItem Item, int Lane, int Lanes)> Layout(TimeGridColumn column)
+    {
+        var result = new List<(TimeGridItem, int, int)>();
+        var group = new List<(TimeGridItem Item, int Lane)>();
+        var laneEnds = new List<DateTime>();
+        var groupEnd = DateTime.MinValue;
+
+        void Close()
+        {
+            result.AddRange(group.Select(g => (g.Item, g.Lane, laneEnds.Count)));
+            group.Clear();
+            laneEnds.Clear();
+        }
+
+        foreach (var item in column.Items.OrderBy(i => i.Start).ThenByDescending(i => i.End))
+        {
+            if (group.Count > 0 && item.Start >= groupEnd) Close();
+
+            var lane = laneEnds.FindIndex(end => end <= item.Start);
+            if (lane < 0)
+            {
+                lane = laneEnds.Count;
+                laneEnds.Add(item.End);
+            }
+            else
+            {
+                laneEnds[lane] = item.End;
+            }
+            group.Add((item, lane));
+            groupEnd = group.Count == 1 ? item.End : (item.End > groupEnd ? item.End : groupEnd);
+        }
+        Close();
+        return result;
+    }
+}

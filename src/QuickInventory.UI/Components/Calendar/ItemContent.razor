@@ -1,0 +1,19 @@
+@* Texto de un bloque de TimeGrid: hora y título; si cabe, también el detalle. *@
+@if (Short)
+{
+    <span class="time-grid-item-line"><b>@Item.Start.ToString("H:mm")</b> @Item.Title</span>
+}
+else
+{
+    <span class="time-grid-item-time">@Item.Start.ToString("H:mm")–@Item.End.ToString("H:mm")</span>
+    <span class="time-grid-item-title">@Item.Title</span>
+    @if (Item.Detail is not null)
+    {
+        <span class="time-grid-item-detail">@Item.Detail</span>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public TimeGridItem Item { get; set; } = default!;
+    [Parameter] public bool Short { get; set; }
+}

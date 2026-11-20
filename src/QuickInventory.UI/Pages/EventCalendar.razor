@@ -1,0 +1,637 @@
+@page "/calendar"
+@inject ICalendarService CalendarService
+@inject IOnlineTicketService OnlineTicketService
+@inject ClientSettings Client
+@inject IDialogService Dialogs
+@inject ISnackbar Warnings
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    <h1 class="page-title mb-0">Calendario</h1>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.Refresh" OnClick="Reload" Disabled="loading">
+        Actualizar
+    </MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="NewEvent">
+        Nueva reserva
+    </MudButton>
+</div>
+
+<MudText Class="mb-4">
+    Eventos y reservas de hora@(OnlineEnabled ? ", y las entradas compradas en la página web" : "").
+    Pulsa una hora libre para reservarla, o un evento para cambiarlo.@(OnlineEnabled ?   " Pulsa las entradas online de una hora para ver sus pedidos y marcar los que han venido." : "")
+</MudText>
+
+@* Vista (mes, semana o día) y flechas grandes para moverse. *@
+<div class="d-flex align-center flex-wrap gap-2 mb-4">
+    <div class="calendar-modes mr-4" role="group" aria-label="Vista">
+        @foreach (var (value, text) in Modes)
+        {
+            <MudButton Variant="@(mode == value ? Variant.Filled : Variant.Outlined)" Color="Color.Primary" Size="Size.Large"
+                       aria-pressed="@(mode == value ? "true" : "false")" OnClick="() => ChangeMode(value)">
+                @text
+            </MudButton>
+        }
+    </div>
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Variant="Variant.Outlined" Size="Size.Large"
+                   OnClick="() => Move(-1)" aria-label="Anterior" />
+    <MudText Typo="Typo.h6" Class="calendar-period">@PeriodLabel</MudText>
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Variant="Variant.Outlined" Size="Size.Large"
+                   OnClick="() => Move(1)" aria-label="Siguiente" />
+    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Large" Class="ml-2"
+               OnClick="GoToToday" Disabled="@(selected == Today)">
+        Hoy
+    </MudButton>
+</div>
+
+@if (loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+
+@if (eventsError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@eventsError</MudAlert>
+}
+
+@if (OnlineEnabled && demo)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        Las entradas online son <b>de ejemplo</b>, no ventas reales. Para ver las de la tienda, configura la conexión
+        desde el perfil Admin, en «Tienda online».
+    </MudAlert>
+}
+
+@if (ticketsError is not null)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4">@ticketsError</MudAlert>
+}
+
+@switch (mode)
+{
+    case CalendarMode.Month:
+        @* Cada día muestra sus primeros eventos y cuántas entradas online tiene; al pulsarlo se abre el día. *@
+        <div class="calendar">
+            @foreach (var weekday in Weekdays)
+            {
+                <div class="calendar-weekday">@weekday</div>
+            }
+            @foreach (var day in MonthDays)
+            {
+                if (day.Month != selected.Month)
+                {
+                    <div class="calendar-day calendar-day-outside"></div>
+                    continue;
+                }
+                var dayEvents = EventsOn(day);
+                var count = TicketsOn(day).Sum(t => t.Quantity);
+                <button type="button" class="@DayClass(day)" @onclick="() => OpenDay(day)"
+                        aria-label="@($"{day:dddd d}: {dayEvents.Count} eventos, {count} entradas online")">
+                    <span class="calendar-day-number">@day.Day</span>
+                    @foreach (var e in dayEvents.Take(MonthEventsPerDay))
+                    {
+                        <span class="calendar-event" style="background-color: @e.Color; color: @EventColors.TextOn(e.Color)">
+                            @e.Start.ToString("H:mm") @e.Title
+                        </span>
+                    }
+                    @if (dayEvents.Count > MonthEventsPerDay)
+                    {
+                        <span class="calendar-event-more">y @(dayEvents.Count - MonthEventsPerDay) más</span>
+                    }
+                    @if (count > 0)
+                    {
+                        <span class="calendar-day-tickets" style="background-color: @Client.Colors.Secondary; color: @EventColors.TextOn(Client.Colors.Secondary)">
+                            <MudIcon Icon="@Icons.Material.Filled.ConfirmationNumber" Size="Size.Small" /> @count
+                        </span>
+                    }
+                </button>
+            }
+        </div>
+
+        @if (undated.Count > 0)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-4">
+                Hay @undated.Sum(t => t.Quantity) entradas compradas este mes en las que no aparece el día
+                de la visita. No salen en el calendario.
+            </MudAlert>
+            <MudExpansionPanels Outlined="true" Class="mt-2">
+                <MudExpansionPanel Text="Ver esas entradas">
+                    <TicketLinesTable Tickets="undated" ShowOrderDate="true" />
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        }
+        break;
+
+    case CalendarMode.Week:
+        var weekColumns = WeekColumns();
+        var (weekFirst, weekLast) = Hours(weekColumns);
+        <TimeGrid Columns="weekColumns" FirstHour="weekFirst" LastHour="weekLast" MinColumnWidth="120"
+                  OnSlotClick="SlotClicked" OnItemClick="ItemClicked" OnHeaderClick="c => OpenDay(c.Day)" />
+        @if (OnlineEnabled)
+        {
+            <TicketsLegend Color="@Client.Colors.Secondary" />
+        }
+        break;
+
+    case CalendarMode.Day:
+        var dayColumns = DayColumns();
+        var (dayFirst, dayLast) = Hours(dayColumns);
+        @if (rooms.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-4">
+                Todavía no hay salas. Puedes añadirlas al crear una reserva (botón con la casita junto a «Sala»)
+                o desde el perfil Admin, en «Salas».
+            </MudAlert>
+        }
+        <TimeGrid Columns="dayColumns" FirstHour="dayFirst" LastHour="dayLast" MinColumnWidth="160" HighlightTodayHeader="false"
+                  OnSlotClick="SlotClicked" OnItemClick="ItemClicked" />
+
+        <MudGrid Spacing="4" Class="mt-2">
+            @if (rooms.Count > 0)
+            {
+                <MudItem xs="12" md="5">
+                    <MudPaper Class="pa-4" Outlined="true">
+                        <MudText Typo="Typo.h6" Class="mb-1">Horas libres</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                            De @($"{DefaultFirstHour}:00") a @($"{DefaultLastHour}:00"). Pulsa una para reservarla.
+                        </MudText>
+                        @foreach (var room in rooms)
+                        {
+                            var free = FreeSlots(room);
+                            <div class="free-slots-room">
+                                <span class="product-name">@room.Name</span>
+                                <div class="d-flex flex-wrap gap-1 mt-1">
+                                    @if (free.Count == 0)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Default" Disabled="true">Ocupada todo el día</MudChip>
+                                    }
+                                    @foreach (var (from, to) in free)
+                                    {
+                                        <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined"
+                                                 OnClick="() => OpenEvent(NewAt(from, room.Id, to), NewTitle)">
+                                            @from.ToString("H:mm") – @to.ToString("H:mm")
+                                        </MudChip>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </MudPaper>
+                </MudItem>
+            }
+
+            <MudItem xs="12" md="@(rooms.Count > 0 ? 7 : 12)">
+                <MudPaper Class="pa-4" Outlined="true">
+                    <MudText Typo="Typo.h6" Class="mb-3">Eventos del día</MudText>
+                    @{ var selectedEvents = EventsOn(selected); }
+                    @if (selectedEvents.Count == 0)
+                    {
+                        <MudText>No hay nada reservado este día.</MudText>
+                    }
+                    @foreach (var e in selectedEvents)
+                    {
+                        <button type="button" class="event-detail" style="border-left-color: @e.Color" @onclick="() => EditEvent(e)">
+                            <span class="event-detail-time">@e.Start.ToString("H:mm") – @e.End.ToString("H:mm")</span>
+                            <span class="event-detail-title">@e.Title</span>
+                            <span class="event-detail-info">
+                                @(e.Room?.Name ?? "Sin sala")@(e.People is { } people ? $" · {people} personas" : "")@(e.Contact is { } contact ? $" · {contact}" : "")
+                            </span>
+                            @if (e.Notes is not null)
+                            {
+                                <span class="event-detail-notes">@e.Notes</span>
+                            }
+                        </button>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            @if (OnlineEnabled)
+            {
+                var dayTickets = TicketsOn(selected);
+                <MudItem xs="12">
+                    <MudPaper Class="pa-4" Outlined="true">
+                        <MudText Typo="Typo.h6">Entradas online</MudText>
+                        <MudText Typo="Typo.h4" Class="mb-4"><b>@dayTickets.Sum(t => t.Quantity)</b> entradas</MudText>
+                        @if (dayTickets.Count == 0)
+                        {
+                            <MudText>No hay entradas compradas online para este día.</MudText>
+                        }
+                        else
+                        {
+                            var types = dayTickets.Select(t => t.Type).Distinct().Order().ToList();
+                            <div class="online-hours">
+                                <MudSimpleTable Dense="true" Outlined="true" Hover="true">
+                                    <thead>
+                                        <tr>
+                                            <th>Hora</th>
+                                            <th style="text-align:right">Pedidos</th>
+                                            @foreach (var type in types)
+                                            {
+                                                <th style="text-align:right">@type</th>
+                                            }
+                                            <th style="text-align:right">Total</th>
+                                            <th style="text-align:right">Han venido</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var hour in dayTickets.GroupBy(t => t.VisitTime).OrderBy(g => g.Key is null).ThenBy(g => g.Key))
+                                        {
+                                            var hourTickets = hour.ToList();
+                                            var hourArrived = hourTickets.Where(t => t.CheckedIn).Sum(t => t.Quantity);
+                                            <tr class="online-hours-row" @onclick="() => OpenCheckIn(hourTickets)"
+                                                title="Pulsa para marcar quién ha venido">
+                                                <td class="product-name">@(hour.Key?.ToString("HH:mm") ?? "Sin hora")</td>
+                                                <td style="text-align:right">@hour.Select(t => t.OrderId).Distinct().Count()</td>
+                                                @foreach (var type in types)
+                                                {
+                                                    <td style="text-align:right">@Blank(hour.Where(t => t.Type == type).Sum(t => t.Quantity))</td>
+                                                }
+                                                <td style="text-align:right"><b>@hour.Sum(t => t.Quantity)</b></td>
+                                                <td style="text-align:right">@Blank(hourArrived)</td>
+                                                <td style="text-align:right">
+                                                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                                               StartIcon="@Icons.Material.Filled.HowToReg">
+                                                        Marcar
+                                                    </MudButton>
+                                                </td>
+                                            </tr>
+                                        }
+                                        <tr class="online-hours-total">
+                                            <td>Total</td>
+                                            <td style="text-align:right">@dayTickets.Select(t => t.OrderId).Distinct().Count()</td>
+                                            @foreach (var type in types)
+                                            {
+                                                <td style="text-align:right">@dayTickets.Where(t => t.Type == type).Sum(t => t.Quantity)</td>
+                                            }
+                                            <td style="text-align:right">@dayTickets.Sum(t => t.Quantity)</td>
+                                            <td style="text-align:right">@dayTickets.Where(t => t.CheckedIn).Sum(t => t.Quantity)</td>
+                                            <td></td>
+                                        </tr>
+                                    </tbody>
+                                </MudSimpleTable>
+                            </div>
+
+                            <MudText Typo="Typo.subtitle1" Class="mt-6 mb-2"><b>Pedidos</b></MudText>
+                            <TicketLinesTable Tickets="dayTickets" ShowCheckIn="true" />
+                        }
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+        break;
+}
+
+@code {
+    private enum CalendarMode { Month, Week, Day }
+
+    private static readonly (CalendarMode, string)[] Modes =
+        [(CalendarMode.Month, "Mes"), (CalendarMode.Week, "Semana"), (CalendarMode.Day, "Día")];
+
+    private static readonly string[] Weekdays = ["L", "M", "X", "J", "V", "S", "D"];
+
+    /// <summary>Horas que se ven siempre en semana y día (más si hay algo antes o después) y en las que se buscan huecos libres.</summary>
+    private const int DefaultFirstHour = 9;
+    private const int DefaultLastHour = 20;
+    /// <summary>Huecos libres más cortos que esto no se ofrecen.</summary>
+    private static readonly TimeSpan MinimumFreeSlot = TimeSpan.FromMinutes(30);
+    /// <summary>Las entradas online solo tienen hora de inicio: se dibujan con esta duración.</summary>
+    private static readonly TimeSpan TicketBlock = TimeSpan.FromMinutes(30);
+    private const int MonthEventsPerDay = 3;
+    private const string NewTitle = "Nueva reserva";
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    private CalendarMode mode = CalendarMode.Week;
+    private DateOnly selected = Today;
+
+    private List<Room> rooms = [];
+    private List<CalendarEvent> events = [];
+    private List<OnlineTicket> tickets = [];
+    /// <summary>Entradas en las que no se ha encontrado el día de la visita (solo en la vista de mes).</summary>
+    private List<OnlineTicket> undated = [];
+    /// <summary>Fechas cargadas: si la vista nueva cae dentro, no hace falta volver a leer.</summary>
+    private (DateOnly From, DateOnly To)? loaded;
+
+    private bool loading;
+    private bool demo;
+    private string? eventsError;
+    private string? ticketsError;
+    /// <summary>Cuenta las cargas: si se cambia de fecha rápido, solo se muestra la última.</summary>
+    private int loadNumber;
+
+    private bool OnlineEnabled => Client.Features.PrestaShop;
+
+    private DateOnly MonthStart => new(selected.Year, selected.Month, 1);
+    private DateOnly WeekStart => selected.AddDays(-(((int)selected.DayOfWeek + 6) % 7));
+
+    private (DateOnly From, DateOnly To) Range => mode switch
+    {
+        CalendarMode.Month => (MonthStart, MonthStart.AddMonths(1).AddDays(-1)),
+        CalendarMode.Week => (WeekStart, WeekStart.AddDays(6)),
+        _ => (selected, selected),
+    };
+
+    private string PeriodLabel => mode switch
+    {
+        CalendarMode.Month => selected.ToString("MMMM 'de' yyyy"),
+        CalendarMode.Week when WeekStart.Month == WeekStart.AddDays(6).Month =>
+            $"{WeekStart.Day} – {WeekStart.AddDays(6):d 'de' MMMM 'de' yyyy}",
+        CalendarMode.Week => $"{WeekStart:d 'de' MMM} – {WeekStart.AddDays(6):d 'de' MMM 'de' yyyy}",
+        _ => selected.ToString("dddd, d 'de' MMMM 'de' yyyy"),
+    };
+
+    /// <summary>Semanas completas, de lunes a domingo, que contienen el mes.</summary>
+    private IEnumerable<DateOnly> MonthDays
+    {
+        get
+        {
+            var month = MonthStart;
+            var start = month.AddDays(-(((int)month.DayOfWeek + 6) % 7));
+            var days = (int)Math.Ceiling((month.DayNumber - start.DayNumber + DateTime.DaysInMonth(month.Year, month.Month)) / 7.0) * 7;
+            return Enumerable.Range(0, days).Select(start.AddDays);
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task ChangeMode(CalendarMode value)
+    {
+        mode = value;
+        await LoadIfNeeded();
+    }
+
+    private async Task Move(int steps)
+    {
+        selected = mode switch
+        {
+            CalendarMode.Month => MonthStart.AddMonths(steps),
+            CalendarMode.Week => selected.AddDays(7 * steps),
+            _ => selected.AddDays(steps),
+        };
+        // Al llegar al mes o la semana de hoy, se marca hoy.
+        if (mode != CalendarMode.Day && Range.From <= Today && Today <= Range.To) selected = Today;
+        await LoadIfNeeded();
+    }
+
+    private async Task GoToToday()
+    {
+        selected = Today;
+        await LoadIfNeeded();
+    }
+
+    private async Task OpenDay(DateOnly day)
+    {
+        selected = day;
+        mode = CalendarMode.Day;
+        await LoadIfNeeded();
+    }
+
+    private async Task LoadIfNeeded()
+    {
+        var range = Range;
+        // En la vista de mes hacen falta las entradas sin día, que solo se leen al cargar el mes entero.
+        if (loaded is { } l && l.From <= range.From && range.To <= l.To && (mode != CalendarMode.Month || l == range))
+            return;
+        await Load();
+    }
+
+    private Task Reload() => Load();
+
+    private async Task Load()
+    {
+        var number = ++loadNumber;
+        var range = Range;
+        loading = true;
+        try
+        {
+            var roomsTask = CalendarService.GetRoomsAsync();
+            var eventsTask = CalendarService.GetEventsAsync(range.From, range.To);
+            var ticketsTask = OnlineEnabled ? LoadTickets(range) : Task.FromResult<(List<OnlineTicket>, List<OnlineTicket>, string?)>(([], [], null));
+
+            List<Room> newRooms;
+            List<CalendarEvent> newEvents;
+            string? newEventsError = null;
+            try
+            {
+                newRooms = await roomsTask;
+                newEvents = await eventsTask;
+            }
+            catch (Exception)
+            {
+                (newRooms, newEvents) = ([], []);
+                newEventsError = "No se han podido cargar los eventos. Inténtalo de nuevo.";
+            }
+            var (newTickets, newUndated, newTicketsError) = await ticketsTask;
+
+            if (number != loadNumber) return;
+            (rooms, events, eventsError) = (newRooms, newEvents, newEventsError);
+            (tickets, undated, ticketsError) = (newTickets, newUndated, newTicketsError);
+            loaded = newEventsError is null && newTicketsError is null ? range : null;
+        }
+        finally
+        {
+            if (number == loadNumber) loading = false;
+        }
+    }
+
+    private async Task<(List<OnlineTicket>, List<OnlineTicket>, string?)> LoadTickets((DateOnly From, DateOnly To) range)
+    {
+        try
+        {
+            demo = (await OnlineTicketService.GetSettingsAsync()).IsDemo;
+            var result = await OnlineTicketService.GetTicketsAsync(range.From, range.To);
+            return (result.Where(t => t.VisitDay is not null).ToList(),
+                    result.Where(t => t.VisitDay is null).OrderBy(t => t.OrderDate).ToList(),
+                    null);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return ([], [], ex.Message);
+        }
+        catch (Exception)
+        {
+            return ([], [], "No se han podido leer las entradas de la tienda online. Inténtalo de nuevo.");
+        }
+    }
+
+    private List<CalendarEvent> EventsOn(DateOnly day) => events.Where(e => e.Day == day).ToList();
+
+    private List<OnlineTicket> TicketsOn(DateOnly day) =>
+        tickets.Where(t => t.VisitDay == day).OrderBy(t => t.VisitTime).ThenBy(t => t.OrderId).ToList();
+
+    private static TimeGridItem ToItem(CalendarEvent e, bool showRoom)
+    {
+        var detail = string.Join(" · ", new[]
+        {
+            showRoom ? e.Room?.Name : null,
+            e.People is { } people ? $"{people} personas" : null,
+        }.Where(d => d is not null));
+        return new TimeGridItem(e.Start, e.End, e.Title, detail.Length == 0 ? null : detail, e.Color, e);
+    }
+
+    /// <summary>
+    /// Un bloque por cada hora con entradas online, con el total y cuántos pedidos han venido. Su Source es
+    /// la lista de entradas de esa hora: al pulsarlo se ven sus pedidos. Si han venido todos, sale más claro.
+    /// </summary>
+    private List<TimeGridItem> TicketItems(DateOnly day) =>
+        TicketsOn(day)
+            .Where(t => t.VisitTime is not null)
+            .GroupBy(t => t.VisitTime!.Value)
+            .Select(g =>
+            {
+                var start = day.ToDateTime(g.Key);
+                var count = g.Sum(t => t.Quantity);
+                var orders = g.GroupBy(t => t.OrderId).ToList();
+                var arrived = orders.Count(o => o.All(t => t.CheckedIn));
+                var done = arrived == orders.Count;
+                var title = $"{(done ? "✓ " : "")}{count} {(count == 1 ? "entrada" : "entradas")} online";
+                var detail = $"{orders.Count} {(orders.Count == 1 ? "pedido" : "pedidos")}"
+                             + (arrived > 0 && !done ? $", han venido {arrived}" : done ? ", han venido" : "");
+                return new TimeGridItem(start, start + TicketBlock, title, detail, Client.Colors.Secondary, g.ToList(), done);
+            })
+            .ToList();
+
+    private string? TicketsSubHeader(DateOnly day)
+    {
+        if (!OnlineEnabled) return null;
+        var dayTickets = TicketsOn(day);
+        var total = dayTickets.Sum(t => t.Quantity);
+        if (total == 0) return null;
+        var orders = dayTickets.Select(t => t.OrderId).Distinct().Count();
+        var untimed = dayTickets.Where(t => t.VisitTime is null).Select(t => t.OrderId).Distinct().Count();
+        return $"{orders} {(orders == 1 ? "pedido" : "pedidos")} online, {total} entradas"
+               + (untimed > 0 ? $" ({untimed} sin hora)" : "");
+    }
+
+    private List<TimeGridColumn> WeekColumns() =>
+        Enumerable.Range(0, 7).Select(i =>
+        {
+            var day = WeekStart.AddDays(i);
+            var items = EventsOn(day).Select(e => ToItem(e, showRoom: true)).ToList();
+            if (OnlineEnabled) items.AddRange(TicketItems(day));
+            return new TimeGridColumn(day.ToString("ddd d"), day, items, TicketsSubHeader(day));
+        }).ToList();
+
+    /// <summary>Una columna por sala (las activas y las que tengan algo ese día), otra sin sala y otra con las entradas online.</summary>
+    private List<TimeGridColumn> DayColumns()
+    {
+        var dayEvents = EventsOn(selected);
+        var dayRooms = rooms
+            .Concat(dayEvents.Where(e => e.Room is not null).Select(e => e.Room!))
+            .DistinctBy(r => r.Id)
+            .OrderBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase);
+
+        var columns = dayRooms.Select(room => new TimeGridColumn(
+            room.Name, selected,
+            dayEvents.Where(e => e.RoomId == room.Id).Select(e => ToItem(e, showRoom: false)).ToList(),
+            room.Capacity is { } c ? $"Aforo {c}" : null,
+            room.Id,
+            AllowsNew: room.Active)).ToList();
+
+        columns.Add(new TimeGridColumn("Sin sala", selected,
+            dayEvents.Where(e => e.RoomId is null).Select(e => ToItem(e, showRoom: false)).ToList(),
+            "Reservas de hora y otros"));
+
+        if (OnlineEnabled)
+            columns.Add(new TimeGridColumn("Entradas online", selected, TicketItems(selected),
+                TicketsSubHeader(selected) ?? "Ninguna", AllowsNew: false));
+        return columns;
+    }
+
+    /// <summary>Horas que hay que enseñar: las de siempre, ampliadas si algo empieza antes o termina después.</summary>
+    private static (int First, int Last) Hours(IEnumerable<TimeGridColumn> columns)
+    {
+        int first = DefaultFirstHour, last = DefaultLastHour;
+        foreach (var column in columns)
+        {
+            var dayStart = column.Day.ToDateTime(TimeOnly.MinValue);
+            foreach (var item in column.Items)
+            {
+                first = Math.Min(first, item.Start.Hour);
+                last = Math.Max(last, (int)Math.Ceiling((item.End - dayStart).TotalHours));
+            }
+        }
+        return (first, Math.Min(last, 24));
+    }
+
+    private List<(DateTime From, DateTime To)> FreeSlots(Room room) =>
+        CalendarSlots.Free(
+            EventsOn(selected).Where(e => e.RoomId == room.Id).Select(e => (e.Start, e.End)),
+            selected.ToDateTime(new TimeOnly(DefaultFirstHour, 0)),
+            selected.ToDateTime(new TimeOnly(DefaultLastHour, 0)),
+            MinimumFreeSlot);
+
+    private string DayClass(DateOnly day) =>
+        "calendar-day calendar-day-events"
+        + (day == Today ? " calendar-day-today" : "");
+
+    private static string Blank(int number) => number == 0 ? "" : number.ToString();
+
+    // --- Crear y editar eventos ---
+
+    /// <summary>Evento nuevo; por defecto dura una hora (o hasta <paramref name="until"/> si es antes).</summary>
+    private static CalendarEvent NewAt(DateTime start, int? roomId, DateTime? until = null)
+    {
+        var end = start.AddHours(1);
+        if (until is { } u && u < end) end = u;
+        var lastOfDay = start.Date.AddHours(23).AddMinutes(45);
+        if (end > lastOfDay) end = lastOfDay > start ? lastOfDay : start.Date.AddDays(1);
+        return new CalendarEvent { Start = start, End = end, RoomId = roomId };
+    }
+
+    private Task NewEvent()
+    {
+        // Hoy, a la siguiente hora en punto; otro día, a las 10:00.
+        var now = DateTime.Now;
+        var start = selected == Today && now.Hour + 1 is >= 7 and <= 22
+            ? now.Date.AddHours(now.Hour + 1)
+            : selected.ToDateTime(new TimeOnly(10, 0));
+        return OpenEvent(NewAt(start, null), NewTitle);
+    }
+
+    private Task SlotClicked(TimeGridSlot slot) => OpenEvent(NewAt(slot.Start, slot.Column.RoomId), NewTitle);
+
+    private Task ItemClicked(TimeGridItem item) => item.Source switch
+    {
+        CalendarEvent e => EditEvent(e),
+        List<OnlineTicket> hourTickets => OpenCheckIn(hourTickets),
+        _ => Task.CompletedTask,
+    };
+
+    // --- Entradas online que han venido ---
+
+    /// <summary>
+    /// Abre el diálogo con los pedidos de una hora (bloque de la rejilla o fila de la tabla de la vista día).
+    /// El diálogo guarda y cambia CheckedInAt en estas mismas entradas: al volver basta con repintar,
+    /// sin leer otra vez la tienda.
+    /// </summary>
+    private async Task OpenCheckIn(List<OnlineTicket> hourTickets)
+    {
+        var first = hourTickets[0];
+        var oneOrder = hourTickets.All(t => t.OrderId == first.OrderId);
+        var title = (oneOrder ? $"Pedido de {first.DisplayName}, {first.VisitDay:dddd d 'de' MMMM}" : $"Pedidos online del {first.VisitDay:dddd d 'de' MMMM}")
+                    + (first.VisitTime is { } time ? $" a las {time:H:mm}" : ", sin hora");
+        var parameters = new DialogParameters<OnlineTicketsCheckInDialog> { { x => x.Tickets, hourTickets } };
+        var dialog = await Dialogs.ShowAsync<OnlineTicketsCheckInDialog>(title, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        await dialog.Result;
+    }
+
+    // Se edita una copia: si se cancela, el calendario no cambia.
+    private Task EditEvent(CalendarEvent e) => OpenEvent(e.Clone(), "Editar evento");
+
+    // El diálogo guarda o borra él mismo; aquí solo se recarga.
+    private async Task OpenEvent(CalendarEvent calendarEvent, string title)
+    {
+        var parameters = new DialogParameters<CalendarEventDialog>
+        {
+            { x => x.Event, calendarEvent },
+            { x => x.Rooms, rooms },
+        };
+        var dialog = await Dialogs.ShowAsync<CalendarEventDialog>(title, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await Load();
+    }
+}

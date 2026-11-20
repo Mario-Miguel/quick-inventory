@@ -78,7 +78,7 @@ con su `client.json`:
 
 - `AppName`: nombre de la barra superior, del título de la ventana y de los avisos.
 - `Colors`: colores en formato `#RRGGBB`. `Primary` es el de los botones y la barra superior.
-- `Features`: módulos opcionales. Sin `PrestaShop` desaparecen «Entradas online» y «Tienda online».
+- `Features`: módulos opcionales. Sin `PrestaShop` desaparece «Tienda online» y el «Calendario» no muestra las entradas compradas en la web.
   `Verifactu` todavía no cambia nada: la app aún no envía facturas (ver `docs/verifactu.md`).
 - `Issuer` (opcional): datos fiscales del titular. Si están, el asistente de la primera instalación sale ya
   relleno y solo hay que confirmarlos. Si no, se escriben a mano en el asistente.

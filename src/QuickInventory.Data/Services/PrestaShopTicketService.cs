@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using QuickInventory.Core;
 using QuickInventory.Core.Models;
 using QuickInventory.Core.Services;
@@ -67,10 +68,62 @@ public sealed class PrestaShopTicketService(IDbContextFactory<BaseDbContext> fac
         var tickets = await ReadTicketsAsync(settings,
             $"orders?display=full&date=1&filter[date_add]={Escape(interval)}&sort={Escape("[id_ASC]")}");
 
-        return tickets
+        var result = tickets
             .Where(t => t.Paid)
             .Where(t => (t.VisitDay ?? DateOnly.FromDateTime(t.OrderDate)) is var day && day >= from && day <= to)
             .ToList();
+        if (result.Count == 0) return result;
+
+        var orderIds = result.Select(t => t.OrderId).Distinct().ToList();
+        await using var db = await factory.CreateDbContextAsync();
+        var checkIns = await db.OnlineTicketCheckIns.AsNoTracking()
+            .Where(c => orderIds.Contains(c.OrderId))
+            .ToDictionaryAsync(c => (c.OrderId, c.OrderLineId), c => c.CheckedInAt);
+        foreach (var ticket in result)
+        {
+            ticket.CheckedInAt = checkIns.TryGetValue((ticket.OrderId, ticket.OrderLineId), out var at) ? at : null;
+        }
+        return result;
+    }
+
+    public async Task SetCheckedInAsync(IReadOnlyCollection<OnlineTicket> tickets, bool checkedIn)
+    {
+        if (tickets.Count == 0) return;
+        var keys = tickets.Select(t => (t.OrderId, t.OrderLineId)).ToHashSet();
+        var orderIds = keys.Select(k => k.OrderId).Distinct().ToList();
+
+        await using var db = await factory.CreateDbContextAsync();
+        var saved = (await db.OnlineTicketCheckIns.Where(c => orderIds.Contains(c.OrderId)).ToListAsync())
+            .Where(c => keys.Contains((c.OrderId, c.OrderLineId)))
+            .ToList();
+
+        var now = DateTime.Now;
+        if (checkedIn)
+        {
+            var existing = saved.Select(c => (c.OrderId, c.OrderLineId)).ToHashSet();
+            db.OnlineTicketCheckIns.AddRange(keys.Where(k => !existing.Contains(k))
+                .Select(k => new OnlineTicketCheckIn { OrderId = k.OrderId, OrderLineId = k.OrderLineId, CheckedInAt = now }));
+        }
+        else
+        {
+            db.OnlineTicketCheckIns.RemoveRange(saved);
+        }
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            throw new BusinessRuleException(
+                "Otro ordenador estaba marcando estas mismas entradas. Pulsa «Actualizar» y vuelve a intentarlo.");
+        }
+
+        var times = saved.ToDictionary(c => (c.OrderId, c.OrderLineId), c => c.CheckedInAt);
+        foreach (var ticket in tickets)
+        {
+            ticket.CheckedInAt = checkedIn ? times.GetValueOrDefault((ticket.OrderId, ticket.OrderLineId), now) : null;
+        }
     }
 
     private static async Task<List<OnlineTicket>> ReadTicketsAsync(OnlineShopSettings settings, string query)
@@ -79,13 +132,10 @@ public sealed class PrestaShopTicketService(IDbContextFactory<BaseDbContext> fac
         var ticketProducts = ProductIds(settings);
         var tickets = new List<OnlineTicket>();
 
-        // Sin resultados, PrestaShop devuelve [] en vez de {"orders": [...]}.
-        if (json.RootElement.ValueKind != JsonValueKind.Object
-            || !json.RootElement.TryGetProperty("orders", out var orders)
-            || orders.ValueKind != JsonValueKind.Array)
-        {
-            return tickets;
-        }
+        if (!TryGetList(json, "orders", out var orders)) return tickets;
+
+        var names = await ReadClientNamesAsync(settings,
+            orders.EnumerateArray().Select(o => Number(o, "id_customer")).Where(id => id > 0).ToHashSet());
 
         foreach (var order in orders.EnumerateArray())
         {
@@ -110,7 +160,9 @@ public sealed class PrestaShopTicketService(IDbContextFactory<BaseDbContext> fac
                 {
                     OrderId = Number(order, "id"),
                     OrderReference = Text(order, "reference"),
+                    ClientName = names.GetValueOrDefault(Number(order, "id_customer"), ""),
                     OrderDate = orderDate,
+                    OrderLineId = Number(row, "id"),
                     Paid = Text(order, "valid") is "1" or "true" or "True",
                     ProductId = productId,
                     ProductName = name,
@@ -122,6 +174,51 @@ public sealed class PrestaShopTicketService(IDbContextFactory<BaseDbContext> fac
             }
         }
         return tickets;
+    }
+
+    /// <summary>Clientes por los que se pregunta en cada petición, para que la dirección no sea muy larga.</summary>
+    private const int ClientsPerRequest = 50;
+
+    /// <summary>
+    /// Nombre y apellidos de los clientes de PrestaShop, por id. Si la clave no tiene permiso para ver los
+    /// clientes (customers → GET) devuelve los que haya podido leer: las entradas se siguen viendo, sin el nombre.
+    /// </summary>
+    private static async Task<Dictionary<int, string>> ReadClientNamesAsync(OnlineShopSettings settings, IReadOnlyCollection<int> ids)
+    {
+        var names = new Dictionary<int, string>();
+        foreach (var chunk in ids.Order().Chunk(ClientsPerRequest))
+        {
+            JsonDocument json;
+            try
+            {
+                json = await GetAsync(settings,
+                    $"customers?display={Escape("[id,firstname,lastname]")}&filter[id]={Escape($"[{string.Join('|', chunk)}]")}");
+            }
+            catch (BusinessRuleException)
+            {
+                return names;
+            }
+
+            using (json)
+            {
+                if (!TryGetList(json, "customers", out var customers)) continue;
+                foreach (var customer in customers.EnumerateArray())
+                {
+                    var name = $"{Text(customer, "firstname").Trim()} {Text(customer, "lastname").Trim()}".Trim();
+                    if (name.Length > 0) names[Number(customer, "id")] = name;
+                }
+            }
+        }
+        return names;
+    }
+
+    /// <summary>Lista de un recurso ({"orders": [...]}). Sin resultados, PrestaShop devuelve [] en vez de la lista vacía.</summary>
+    private static bool TryGetList(JsonDocument json, string resource, out JsonElement list)
+    {
+        list = default;
+        return json.RootElement.ValueKind == JsonValueKind.Object
+               && json.RootElement.TryGetProperty(resource, out list)
+               && list.ValueKind == JsonValueKind.Array;
     }
 
     private static async Task<JsonDocument> GetAsync(OnlineShopSettings settings, string query)

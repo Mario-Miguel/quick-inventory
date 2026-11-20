@@ -2,7 +2,7 @@
 <MudSimpleTable Dense="true" Outlined="true" Hover="true">
     <thead>
         <tr>
-            <th>Pedido</th>
+            <th>Nombre</th>
             @if (ShowOrderDate)
             {
                 <th>Comprado</th>
@@ -13,13 +13,17 @@
             }
             <th>Entrada</th>
             <th style="text-align:right">Cantidad</th>
+            @if (ShowCheckIn)
+            {
+                <th>Ha venido</th>
+            }
         </tr>
     </thead>
     <tbody>
         @foreach (var ticket in Tickets)
         {
             <tr>
-                <td style="white-space:nowrap">@ticket.OrderReference</td>
+                <td>@ticket.DisplayName</td>
                 @if (ShowOrderDate)
                 {
                     <td style="white-space:nowrap">@ticket.OrderDate.ToString("dd/MM/yyyy HH:mm")</td>
@@ -32,6 +36,10 @@
                     <td>@ticket.Type</td>
                 }
                 <td style="text-align:right">@ticket.Quantity</td>
+                @if (ShowCheckIn)
+                {
+                    <td>@(ticket.CheckedInAt is { } at ? $"Sí, a las {at:H:mm}" : "")</td>
+                }
             </tr>
         }
     </tbody>
@@ -41,4 +49,6 @@
     [Parameter, EditorRequired] public IReadOnlyList<OnlineTicket> Tickets { get; set; } = [];
     /// <summary>Muestra cuándo se compró en vez de la hora de la visita.</summary>
     [Parameter] public bool ShowOrderDate { get; set; }
+    /// <summary>Añade una columna con si ya han venido al museo y a qué hora.</summary>
+    [Parameter] public bool ShowCheckIn { get; set; }
 }

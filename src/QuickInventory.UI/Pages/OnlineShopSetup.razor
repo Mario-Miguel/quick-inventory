@@ -48,7 +48,7 @@
                 <li>En el panel de PrestaShop, ve a <b>Parámetros avanzados → Webservice</b>.</li>
                 <li>Activa <b>Habilitar el webservice de PrestaShop</b> y guarda.</li>
                 <li>Pulsa <b>Añadir nueva clave</b> y genera una.</li>
-                <li>En los permisos marca solo <b>Ver (GET)</b> en <b>orders</b>.</li>
+                <li>En los permisos marca solo <b>Ver (GET)</b> en <b>orders</b> y en <b>customers</b> (para ver el nombre de quien compra).</li>
                 <li>Copia la clave aquí y pulsa <b>Probar conexión</b>.</li>
             </ol>
         </MudPaper>
@@ -68,9 +68,17 @@
         Comprueba que el día, la hora y el tipo coinciden con lo que eligió el cliente. Si salen vacíos, la tienda
         guarda la fecha de otra forma y hay que adaptar la aplicación.
     </MudText>
+    @if (sample.Count > 0 && sample.All(t => t.ClientName.Length == 0))
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-2">
+            No se ven los nombres de quien compra. Para verlos, dale a la clave permiso <b>Ver (GET)</b> en
+            <b>customers</b>. Mientras tanto, en el calendario saldrá la referencia del pedido.
+        </MudAlert>
+    }
     <MudTable T="OnlineTicket" Items="sample" Dense="true" Striped="true" Elevation="1" Breakpoint="Breakpoint.Sm">
         <HeaderContent>
             <MudTh>Pedido</MudTh>
+            <MudTh>Nombre</MudTh>
             <MudTh>Comprado</MudTh>
             <MudTh>Pagado</MudTh>
             <MudTh>Producto (tal cual en la tienda)</MudTh>
@@ -81,6 +89,7 @@
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="Pedido">@context.OrderReference (@context.OrderId)</MudTd>
+            <MudTd DataLabel="Nombre">@(context.ClientName.Length > 0 ? context.ClientName : "—")</MudTd>
             <MudTd DataLabel="Comprado" Style="white-space:nowrap">@context.OrderDate.ToString("dd/MM/yyyy HH:mm")</MudTd>
             <MudTd DataLabel="Pagado">@(context.Paid ? "Sí" : "No")</MudTd>
             <MudTd DataLabel="Producto">@context.ProductName <span class="mud-text-secondary">(ID @context.ProductId)</span></MudTd>

@@ -22,6 +22,56 @@ namespace QuickInventory.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("QuickInventory.Core.Models.CalendarEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<string>("Contact")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("End")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int?>("People")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("RoomId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("Start")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoomId");
+
+                    b.HasIndex("Start");
+
+                    b.ToTable("CalendarEvents", t =>
+                        {
+                            t.HasCheckConstraint("CK_CalendarEvents_FinDespuesDeInicio", "\"End\" > \"Start\"");
+                        });
+                });
+
             modelBuilder.Entity("QuickInventory.Core.Models.CashMovement", b =>
                 {
                     b.Property<int>("Id")
@@ -555,6 +605,31 @@ namespace QuickInventory.Data.Migrations
                     b.ToTable("OnlineShopSettings");
                 });
 
+            modelBuilder.Entity("QuickInventory.Core.Models.OnlineTicketCheckIn", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CheckedInAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OrderLineId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId", "OrderLineId")
+                        .IsUnique();
+
+                    b.ToTable("OnlineTicketCheckIns");
+                });
+
             modelBuilder.Entity("QuickInventory.Core.Models.Product", b =>
                 {
                     b.Property<int>("Id")
@@ -748,6 +823,33 @@ namespace QuickInventory.Data.Migrations
                     b.HasIndex("PurchaseInvoiceId");
 
                     b.ToTable("PurchaseInvoiceLines");
+                });
+
+            modelBuilder.Entity("QuickInventory.Core.Models.Room", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("Capacity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Rooms");
                 });
 
             modelBuilder.Entity("QuickInventory.Core.Models.Sale", b =>
@@ -960,6 +1062,16 @@ namespace QuickInventory.Data.Migrations
                         .HasColumnType("boolean");
 
                     b.HasDiscriminator().HasValue("TicketOffice");
+                });
+
+            modelBuilder.Entity("QuickInventory.Core.Models.CalendarEvent", b =>
+                {
+                    b.HasOne("QuickInventory.Core.Models.Room", "Room")
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Room");
                 });
 
             modelBuilder.Entity("QuickInventory.Core.Models.CustomerInvoice", b =>
