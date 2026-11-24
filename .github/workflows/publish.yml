@@ -133,7 +133,7 @@ jobs:
 
       - name: Apply migrations
         env:
-          QUICKINVENTORY_ConnectionStrings__Museo: ${{ secrets.DB_CONNECTION }}
+          QUICKINVENTORY_ConnectionStrings__Museo: ${{ secrets.DB_CONNECTION_ADMIN }}
         run: |
           [ -n "$QUICKINVENTORY_ConnectionStrings__Museo" ] || { echo "::error::Missing secret DB_CONNECTION in the environment'$CLIENT'"; exit 1; }
           # dotnet ef no restaura los paquetes: sin esto falla con NETSDK1004 (falta project.assets.json).
