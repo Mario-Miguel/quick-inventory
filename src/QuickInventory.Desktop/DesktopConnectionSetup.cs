@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows;
 using Npgsql;
-using QuickInventory.Core;
 using QuickInventory.Core.Models;
 using QuickInventory.UI;
 

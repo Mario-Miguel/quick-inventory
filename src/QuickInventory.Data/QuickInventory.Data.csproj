@@ -9,6 +9,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\QuickInventory.Core\QuickInventory.Core.csproj" />
+    <ProjectReference Include="..\Invoicing.EntityFrameworkCore\Invoicing.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Invoicing" />
+    <Using Include="Invoicing.Models" />
   </ItemGroup>
 
   <ItemGroup>

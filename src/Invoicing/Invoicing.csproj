@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Facturas a clientes: modelos, reglas de negocio, motor de plantillas e interfaces de los servicios.
+       Sin dependencias, para poder reutilizarla en otros proyectos (ver README.md). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Invoicing</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Disposiciones de la factura que vienen con la librería (ver InvoiceTemplate.Builtin). -->
+  <ItemGroup>
+    <EmbeddedResource Include="Templates\*.html" LogicalName="Invoicing.Templates.%(Filename).html" />
+  </ItemGroup>
+
+</Project>

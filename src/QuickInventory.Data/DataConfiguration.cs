@@ -1,7 +1,8 @@
+using Invoicing.EntityFrameworkCore;
+using Invoicing.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
-using QuickInventory.Core;
 using QuickInventory.Core.Models;
 using QuickInventory.Core.Services;
 using QuickInventory.Data.Services;
@@ -28,10 +29,13 @@ public static class DataConfiguration
         services.AddScoped<IProviderService, ProviderService>();
         services.AddScoped<IPurchaseInvoiceService, PurchaseInvoiceService>();
         services.AddScoped<IDeliveryNoteService, DeliveryNoteService>();
-        services.AddScoped<ICustomerService, CustomerService>();
-        services.AddScoped<ICustomerInvoiceService, CustomerInvoiceService>();
-        services.AddScoped<IInvoiceDesignService, InvoiceDesignService>();
         services.AddScoped<ICalendarService, CalendarService>();
+
+        // Facturas a clientes (librería Invoicing), sobre la misma base de datos.
+        services.AddInvoicingData<BaseDbContext>();
+        services.AddScoped<IInvoiceIssuerProvider, IssuerProvider>();
+        services.AddSingleton<IInvoiceNumberingLock, PostgresInvoicingLock>();
+        services.AddScoped<IReservedSeriesCodes, HostReservedSeriesCodes>();
         return services;
     }
 

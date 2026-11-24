@@ -1,5 +1,4 @@
 using System.Reflection;
-using QuickInventory.Core;
 using QuickInventory.UI;
 using Velopack;
 

@@ -1,0 +1,104 @@
+@* Elegir el cliente de una factura. Si no está en la lista, se crea desde aquí mismo (sin cerrar el
+   diálogo en el que está). Debajo enseña los datos que saldrán en la factura. *@
+@inject ICustomerService CustomerService
+@inject IDialogService Dialogs
+@inject ISnackbar Warnings
+
+<div>
+    <div class="d-flex align-start gap-2">
+        <MudAutocomplete T="Customer" Value="Customer" ValueChanged="Select"
+                         SearchFunc="Search" ToStringFunc="p => p?.LegalName"
+                         Label="Cliente" Placeholder="Escribe el nombre o el NIF"
+                         Required="true" RequiredError="Elige el cliente"
+                         ResetValueOnEmptyText="true" CoerceText="true" MaxItems="null"
+                         AdornmentIcon="@Icons.Material.Filled.Search" AutoFocus="true"
+                         Variant="Variant.Outlined" Class="flex-grow-1">
+            <ItemTemplate Context="p">
+                <div>
+                    <div class="invoicing-strong">@p.LegalName</div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@p.Nif</MudText>
+                </div>
+            </ItemTemplate>
+            <NoItemsTemplate>
+                <MudText Class="pa-2">No hay ningún cliente con ese nombre. Pulsa «Nuevo cliente».</MudText>
+            </NoItemsTemplate>
+        </MudAutocomplete>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   Class="mt-2" Style="white-space:nowrap; height:56px" OnClick="NewCustomer">
+            Nuevo cliente
+        </MudButton>
+    </div>
+
+    @if (Customer is not null)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mt-2">
+            <MudText Typo="Typo.body2"><b>NIF:</b> @Customer.Nif</MudText>
+            @if (Customer.Address is not null)
+            {
+                <MudText Typo="Typo.body2"><b>Dirección:</b> @Customer.Address</MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Color="Color.Error">Falta la dirección: añádela en Clientes antes de emitir la factura.</MudText>
+            }
+            @if (Customer.PhoneNumber is not null)
+            {
+                <MudText Typo="Typo.body2"><b>Teléfono:</b> @Customer.PhoneNumber</MudText>
+            }
+            @if (Customer.Email is not null)
+            {
+                <MudText Typo="Typo.body2"><b>Email:</b> @Customer.Email</MudText>
+            }
+        </MudPaper>
+    }
+</div>
+
+@code {
+    [Parameter] public Customer? Customer { get; set; }
+    [Parameter] public EventCallback<Customer?> CustomerChanged { get; set; }
+
+    private List<Customer> customers = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            customers = await CustomerService.GetCustomersAsync();
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se han podido cargar los clientes. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    // Sin distinguir mayúsculas ni tildes; el NIF se busca sin espacios ni guiones.
+    private Task<IEnumerable<Customer>> Search(string? text, CancellationToken _)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return Task.FromResult<IEnumerable<Customer>>(customers);
+
+        var search = text.Trim();
+        var nif = TaxId.Normalize(search);
+        return Task.FromResult(customers.Where(p =>
+            CultureInfo.CurrentCulture.CompareInfo.IndexOf(p.LegalName, search, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0
+            || (nif.Length > 0 && p.Nif.Contains(nif))));
+    }
+
+    private Task Select(Customer? selected)
+    {
+        Customer = selected;
+        return CustomerChanged.InvokeAsync(selected);
+    }
+
+    private async Task NewCustomer()
+    {
+        var parameters = new DialogParameters<CustomerDialog> { { x => x.Customer, new Customer() } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await Dialogs.ShowAsync<CustomerDialog>("Nuevo cliente", parameters, options);
+        var result = await dialog.Result;
+        if (result is not { Canceled: false, Data: Customer saved }) return;
+
+        // Ya está guardado: se añade a la lista y se deja elegido (el buscador muestra su nombre).
+        customers = customers.Append(saved).OrderBy(p => p.LegalName).ToList();
+        await Select(saved);
+    }
+}

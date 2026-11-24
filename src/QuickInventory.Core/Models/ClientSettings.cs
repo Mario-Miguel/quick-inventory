@@ -107,10 +107,18 @@ public sealed class ClientFeatures
     /// <summary>Entradas vendidas en la tienda online (PrestaShop).</summary>
     public bool PrestaShop { get; set; }
 
+    /// <summary>
+    /// Facturas a clientes (librería Invoicing): clientes, facturas, diseño de factura y sus series. Sin él
+    /// desaparece el apartado «Facturas a clientes» y la parte de facturas de «Series de facturas»; los datos
+    /// que ya hubiera en la base se conservan.
+    /// </summary>
+    public bool CustomerInvoices { get; set; }
+
     public bool IsEnabled(ClientFeature feature) => feature switch
     {
         ClientFeature.Verifactu => Verifactu,
         ClientFeature.PrestaShop => PrestaShop,
+        ClientFeature.CustomerInvoices => CustomerInvoices,
         _ => false
     };
 }
@@ -119,4 +127,5 @@ public enum ClientFeature
 {
     Verifactu,
     PrestaShop,
+    CustomerInvoices,
 }

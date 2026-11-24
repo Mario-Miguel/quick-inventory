@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Text.Json;
-using QuickInventory.Core;
 using QuickInventory.Core.Models;
 
 namespace QuickInventory.Desktop;

@@ -212,15 +212,26 @@
         retrying = false;
     }
 
-    private void OnNavigation(object? sender, LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
+    // Si se llega a una pantalla que el perfil o el cliente no permiten (p. ej. un módulo desactivado en
+    // client.json), se vuelve al inicio.
+    private void OnNavigation(object? sender, LocationChangedEventArgs e) => InvokeAsync(() =>
+    {
+        GoHomeIfNotAllowed();
+        StateHasChanged();
+    });
 
     // Si el nuevo perfil no puede estar en la pantalla actual, se vuelve al inicio.
     private void OnProfileChanged() => InvokeAsync(() =>
     {
-        if (!Modules.Allows(Profile.Current, Client.Features, Navigation.ToBaseRelativePath(Navigation.Uri)))
-            Navigation.NavigateTo("/");
+        GoHomeIfNotAllowed();
         StateHasChanged();
     });
+
+    private void GoHomeIfNotAllowed()
+    {
+        if (!Modules.Allows(Profile.Current, Client.Features, Navigation.ToBaseRelativePath(Navigation.Uri)))
+            Navigation.NavigateTo("/");
+    }
 
     public void Dispose()
     {

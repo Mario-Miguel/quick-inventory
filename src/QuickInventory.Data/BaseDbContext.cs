@@ -1,11 +1,15 @@
-using System.Globalization;
+using Invoicing.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using QuickInventory.Core.Models;
 
 namespace QuickInventory.Data;
 
-public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(options)
+/// <remarks>
+/// Las tablas de facturas a clientes (clientes, series, facturas, diseño) son de la librería Invoicing
+/// (<see cref="IInvoicingDbContext"/>): su configuración está en <see cref="InvoicingModel"/>.
+/// </remarks>
+public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(options), IInvoicingDbContext
 {
     public DbSet<Product> Products => Set<Product>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
@@ -46,15 +50,19 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
         configuration.Properties<StockMovementType>().HaveConversion<string>();
         configuration.Properties<CashMovementType>().HaveConversion<string>();
         configuration.Properties<SalesPoint>().HaveConversion<string>();
-        configuration.Properties<InvoiceLayout>().HaveConversion<string>();
         configuration.Properties<ProductCategory>().HaveConversion<ProductCategoryConverter>();
-        configuration.Properties<InvoiceType>().HaveConversion<InvoiceTypeConverter>();
-        configuration.Properties<TaxExemption>().HaveConversion<TaxExemptionConverter>();
-        configuration.Properties<TaxRate>().HaveConversion<TaxRateConverter>();
+
+        // IVA, exenciones, tipo de factura y disposición de la factura (también en las tablas de la app).
+        configuration.AddInvoicingConventions();
     }
 
     protected override void OnModelCreating(ModelBuilder model)
     {
+        // Tablas de facturas a clientes. La serie va en tabla propia (y no como una columna "tipo" en
+        // InvoiceSeries) para que las versiones anteriores de la app, que buscan la serie de los tickets
+        // solo por el año, no encuentren dos.
+        model.ApplyInvoicingModel();
+
         model.Entity<Product>(e =>
         {
             e.HasDiscriminator<string>("Type")
@@ -146,16 +154,6 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
             e.HasIndex(s => s.Year).IsUnique();
         });
 
-        // Una serie por año para las facturas a clientes, aparte de la de los tickets. Tabla propia (y no
-        // una columna "tipo" en InvoiceSeries) para que las versiones anteriores de la app, que buscan la
-        // serie de los tickets solo por el año, no encuentren dos.
-        model.Entity<CustomerInvoiceSeries>(e =>
-        {
-            e.Property(i => i.Code).HasMaxLength(NumberingSeries.MaxCodeLength).IsRequired();
-            e.HasIndex(s => s.Code).IsUnique();
-            e.HasIndex(s => s.Year).IsUnique();
-        });
-
         model.Entity<Provider>(e =>
         {
             e.Property(i => i.Nif).HasMaxLength(9);
@@ -165,54 +163,6 @@ public class BaseDbContext(DbContextOptions<BaseDbContext> options) : DbContext(
             e.Property(i => i.PhoneNumber).HasMaxLength(Provider.MaxPhoneNumberLength);
             e.Property(i => i.Notes).HasMaxLength(Provider.MaxNotesLength);
             e.HasIndex(i => i.Nif).IsUnique();
-        });
-
-        model.Entity<Customer>(e =>
-        {
-            e.Property(i => i.Nif).HasMaxLength(9);
-            e.Property(i => i.LegalName).HasMaxLength(Contact.MaxLegalNameLength).IsRequired();
-            e.Property(i => i.Address).HasMaxLength(Contact.MaxAddressLength);
-            e.Property(i => i.Email).HasMaxLength(Contact.MaxEmailLength);
-            e.Property(i => i.PhoneNumber).HasMaxLength(Contact.MaxPhoneNumberLength);
-            e.Property(i => i.Notes).HasMaxLength(Contact.MaxNotesLength);
-            e.HasIndex(i => i.Nif).IsUnique();
-        });
-
-        model.Entity<CustomerInvoice>(e =>
-        {
-            e.Property(i => i.SeriesCode).HasMaxLength(NumberingSeries.MaxCodeLength).IsRequired();
-            e.Property(i => i.InvoiceDate).HasColumnType("date");
-            e.Property(i => i.CustomerNif).HasMaxLength(9).IsRequired();
-            e.Property(i => i.CustomerName).HasMaxLength(Contact.MaxLegalNameLength).IsRequired();
-            e.Property(i => i.CustomerAddress).HasMaxLength(Contact.MaxAddressLength).IsRequired();
-            e.Property(i => i.IssuerNif).HasMaxLength(9).IsRequired();
-            e.Property(i => i.IssuerName).HasMaxLength(120).IsRequired();
-            e.Property(i => i.IssuerAddress).HasMaxLength(300);
-            e.Property(i => i.Notes).HasMaxLength(CustomerInvoice.MaxNotesLength);
-            e.Ignore(i => i.InvoiceId);
-            e.HasOne(i => i.Customer).WithMany().HasForeignKey(i => i.CustomerId).OnDelete(DeleteBehavior.Restrict);
-            e.HasIndex(i => i.InvoiceDate);
-            // Un número no se puede repetir en la misma serie.
-            e.HasIndex(i => new { i.SeriesCode, i.Number }).IsUnique();
-            e.HasMany(i => i.Lines).WithOne().HasForeignKey(l => l.CustomerInvoiceId).OnDelete(DeleteBehavior.Cascade);
-        });
-
-        model.Entity<CustomerInvoiceLine>(e =>
-        {
-            e.Property(l => l.Description).HasMaxLength(CustomerInvoiceLine.MaxDescriptionLength).IsRequired();
-            e.Ignore(l => l.BaseAmount);
-        });
-
-        // Una sola fila: el diseño de las facturas a clientes.
-        model.Entity<InvoiceDesign>(e =>
-        {
-            e.Property(d => d.BackgroundColor).HasMaxLength(7).IsRequired();
-            e.Property(d => d.AccentColor).HasMaxLength(7);
-            e.Property(d => d.FooterText).HasMaxLength(InvoiceDesign.MaxFooterLength);
-            e.Property(d => d.LogoContentType).HasMaxLength(50);
-            e.Property(d => d.LogoFileName).HasMaxLength(InvoiceDesign.MaxFileNameLength);
-            e.Property(d => d.CustomTemplateFileName).HasMaxLength(InvoiceDesign.MaxFileNameLength);
-            e.Ignore(d => d.HasCustomTemplate);
         });
 
         model.Entity<Room>(e =>
@@ -293,21 +243,6 @@ internal sealed class AmountInCentsConverter() : ValueConverter<decimal, long>(
 internal sealed class ProductCategoryConverter() : ValueConverter<ProductCategory, string>(
     categoria => categoria.Value,
     valor => ProductCategory.FromValue(valor)
-);
-
-internal sealed class TaxRateConverter() : ValueConverter<TaxRate, string>(
-    tipo => tipo.Value.ToString(CultureInfo.InvariantCulture),
-    valor => TaxRate.FromValue(decimal.Parse(valor, CultureInfo.InvariantCulture))
-);
-
-internal sealed class TaxExemptionConverter() : ValueConverter<TaxExemption, string>(
-    categoria => categoria.Value,
-    valor => TaxExemption.FromValue(valor)
-);
-
-internal sealed class InvoiceTypeConverter() : ValueConverter<InvoiceType, string>(
-    categoria => categoria.Value,
-    valor => InvoiceType.FromValue(valor)
 );
 
 internal static class AdvisoryLocks

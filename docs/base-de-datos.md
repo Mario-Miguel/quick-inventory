@@ -278,6 +278,13 @@ erDiagram
 
 ## Tablas
 
+Las tablas `Customers`, `CustomerInvoiceSeries`, `CustomerInvoices`, `CustomerInvoiceLines` e `InvoiceDesigns`
+son de la librería Invoicing: sus modelos están en `src/Invoicing/Models` y su configuración en
+`Invoicing.EntityFrameworkCore` (`InvoicingModel.ApplyInvoicingModel`). `BaseDbContext` las incluye
+(`IInvoicingDbContext`), así que van en la misma base y en las mismas migraciones que el resto. Cambiar sus
+nombres o esa configuración cambia el esquema: compruébalo con
+`dotnet ef migrations has-pending-model-changes --project src/QuickInventory.Data --startup-project src/QuickInventory.Data`.
+
 | Tabla                   | Modelo (`QuickInventory.Core/Models`)      | Para qué sirve                                                                                                                                  |
 | ----------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Products`              | `Product` (`TicketProduct`, `ShopProduct`) | Todo lo que se vende: entradas (Taquilla) y artículos (Tienda). Una sola tabla; `Type` dice cuál es y las columnas del otro tipo quedan a null. |

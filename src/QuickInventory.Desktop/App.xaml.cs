@@ -2,10 +2,10 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using Invoicing.UI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
-using QuickInventory.Core;
 using QuickInventory.Core.Models;
 using QuickInventory.Data;
 using QuickInventory.UI;
@@ -183,6 +183,8 @@ public partial class App : Application
         services.AddSingleton(client);
         services.AddSingleton(updater);
         services.AddData(connectionString);
+        // Pantallas de facturas a clientes (Invoicing.UI): sin color propio en el diseño, el de la app.
+        services.AddInvoicingUi(o => o.DefaultAccentColor = client.Colors.Primary);
 
         // Perfil activo (Taquilla / Tienda): uno por ventana.
         services.AddScoped<ActiveProfile>();

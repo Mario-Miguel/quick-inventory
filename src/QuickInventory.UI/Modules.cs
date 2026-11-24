@@ -66,9 +66,9 @@ public static class Modules
         new("Proveedores", "Nombre, NIF y datos de contacto", Icons.Material.Filled.LocalShipping, "/providers", ModuleAreas.Stock, AdminOnly),
 
         // Facturas a clientes
-        new("Facturas a clientes", "Facturas para colegios y organizaciones", Icons.Material.Filled.RequestQuote, "/customer-invoices", ModuleAreas.Invoicing, AdminOnly),
-        new("Clientes", "Colegios y organizaciones a los que facturamos", Icons.Material.Filled.School, "/customers", ModuleAreas.Invoicing, AdminOnly),
-        new("Diseño de factura", "Logotipo, colores y plantilla de las facturas a clientes", Icons.Material.Filled.Palette, "/invoice-design", ModuleAreas.Invoicing, AdminOnly),
+        new("Facturas a clientes", "Facturas para colegios y organizaciones", Icons.Material.Filled.RequestQuote, "/customer-invoices", ModuleAreas.Invoicing, AdminOnly, ClientFeature.CustomerInvoices),
+        new("Clientes", "Colegios y organizaciones a los que facturamos", Icons.Material.Filled.School, "/customers", ModuleAreas.Invoicing, AdminOnly, ClientFeature.CustomerInvoices),
+        new("Diseño de factura", "Logotipo, colores y plantilla de las facturas a clientes", Icons.Material.Filled.Palette, "/invoice-design", ModuleAreas.Invoicing, AdminOnly, ClientFeature.CustomerInvoices),
 
         // Configuración
         new("Datos del titular", "Nombre, NIF y dirección que salen en los tickets", Icons.Material.Filled.Business, "/issuer", ModuleAreas.Settings, AdminOnly),
@@ -90,12 +90,15 @@ public static class Modules
 
     /// <summary>
     /// Indica si el perfil puede estar en la ruta indicada (relativa, sin "/" inicial).
-    /// La pantalla principal está permitida siempre.
+    /// La pantalla principal está permitida siempre. Las subpantallas de un módulo (p. ej.
+    /// "/customer-invoices/12") siguen las reglas del módulo cuya ruta las contiene.
     /// </summary>
     public static bool Allows(SalesPoint profile, ClientFeatures features, string relativePath)
     {
         var route = "/" + relativePath.Split('?', '#')[0].Trim('/');
-        var module = All.FirstOrDefault(m => string.Equals(m.Route, route, StringComparison.OrdinalIgnoreCase));
-        return module is null || module.IsAvailable(profile, features);
+        var modules = All.Where(m => string.Equals(m.Route, route, StringComparison.OrdinalIgnoreCase)
+            || route.StartsWith(m.Route + "/", StringComparison.OrdinalIgnoreCase)).ToList();
+        // Si la misma ruta sale en varios módulos (uno por perfil), basta con que uno lo permita.
+        return modules.Count == 0 || modules.Any(m => m.IsAvailable(profile, features));
     }
 }

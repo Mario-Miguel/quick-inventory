@@ -3,7 +3,6 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using QuickInventory.Core;
 using QuickInventory.Core.Models;
 using QuickInventory.Core.Services;
 

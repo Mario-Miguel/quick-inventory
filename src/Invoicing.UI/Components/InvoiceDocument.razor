@@ -1,0 +1,27 @@
+@* Una factura a cliente con el diseño elegido (ver InvoiceTemplate). La usan la pantalla de la factura y la
+   vista previa de «Diseño de factura». El contenedor .invoice-document es el que se imprime (ver app.css). *@
+@inject InvoicingUiOptions Options
+
+<div class="invoice-document">@((MarkupString)html)</div>
+
+@code {
+    [Parameter, EditorRequired] public CustomerInvoice Invoice { get; set; } = default!;
+    [Parameter, EditorRequired] public InvoiceDesign Design { get; set; } = default!;
+    /// <summary>Plantilla que se quiere ver en lugar de la del diseño (para probar una antes de guardarla).</summary>
+    [Parameter] public string? Template { get; set; }
+
+    private string html = "";
+
+    protected override void OnParametersSet()
+    {
+        try
+        {
+            html = InvoiceTemplate.Render(Template ?? InvoiceTemplate.For(Design), Invoice, Design, Options.DefaultAccentColor);
+        }
+        catch (Exception)
+        {
+            // Una plantilla rara no debe tumbar la pantalla: se avisa en su lugar.
+            html = "<p style=\"padding:16px;color:#b00020\">No se ha podido generar la factura con esta plantilla.</p>";
+        }
+    }
+}

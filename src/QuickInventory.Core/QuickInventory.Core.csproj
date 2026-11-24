@@ -1,15 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Modelos y reglas de negocio. No depende de la interfaz ni de la base de datos,
-       así se puede reutilizar tal cual en la futura versión web. -->
+       así se puede reutilizar tal cual en la futura versión web. Las facturas a clientes y los tipos
+       fiscales comunes (IVA, NIF, series) vienen de la librería Invoicing. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>QuickInventory.Core</RootNamespace>
   </PropertyGroup>
 
-  <!-- Disposiciones de la factura a clientes que vienen con la aplicación (ver InvoiceTemplate.Builtin). -->
   <ItemGroup>
-    <EmbeddedResource Include="Models\Invoices\Templates\*.html" LogicalName="QuickInventory.Core.Models.Templates.%(Filename).html" />
+    <ProjectReference Include="..\Invoicing\Invoicing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Invoicing" />
+    <Using Include="Invoicing.Models" />
   </ItemGroup>
 
 </Project>

@@ -5,8 +5,12 @@
     <Project Path="src/QuickInventory.Core/QuickInventory.Core.csproj" />
     <Project Path="src/QuickInventory.Data/QuickInventory.Data.csproj" />
     <Project Path="src/QuickInventory.Verifactu/QuickInventory.Verifactu.csproj" />
+    <Project Path="src/Invoicing/Invoicing.csproj" />
+    <Project Path="src/Invoicing.EntityFrameworkCore/Invoicing.EntityFrameworkCore.csproj" />
+    <Project Path="src/Invoicing.UI/Invoicing.UI.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Invoicing.Tests/Invoicing.Tests.csproj" />
     <Project Path="tests/QuickInventory.Core.Tests/QuickInventory.Core.Tests.csproj" />
     <Project Path="tests/QuickInventory.Verifactu.Tests/QuickInventory.Verifactu.Tests.csproj" />
   </Folder>

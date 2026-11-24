@@ -1,0 +1,328 @@
+@page "/invoice-design"
+@* Diseño de las facturas a clientes: logotipo, colores, disposición y pie, o una plantilla HTML importada
+   que lo sustituye. A la derecha se ve cómo queda con una factura de ejemplo, antes de guardar. *@
+@using System.Text
+@using MudBlazor.Utilities
+@inject IInvoiceDesignService InvoiceDesignService
+@inject IInvoiceIssuerProvider IssuerProvider
+@inject IFilePicker FilePicker
+@inject IFileSaver FileSaver
+@inject IDialogService Dialogs
+@inject ISnackbar Warnings
+
+<div class="d-flex align-center flex-wrap gap-4 mb-4">
+    <h1 class="page-title mb-0">Diseño de factura</h1>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" StartIcon="@Icons.Material.Filled.Save"
+               Disabled="@(design is null || saving)" OnClick="Save">
+        Guardar diseño
+    </MudButton>
+</div>
+
+<MudText Class="mb-4">
+    Cómo salen las facturas a clientes al imprimirlas o guardarlas en PDF. El cambio vale para todos los equipos
+    y también para las facturas ya emitidas (sus datos no cambian, solo su aspecto).
+</MudText>
+
+@if (design is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Spacing="4">
+        <MudItem xs="12" md="5">
+            <MudStack Spacing="3">
+                <MudPaper Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-2">Logotipo</MudText>
+                    @if (design.Logo is not null)
+                    {
+                        <img src="@LogoUrl" alt="Logotipo" class="design-logo mb-2" />
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">@design.LogoFileName</MudText>
+                    }
+                    else
+                    {
+                        <MudText Class="mud-text-secondary mb-2">Sin logotipo.</MudText>
+                    }
+                    <div class="d-flex gap-2 flex-wrap">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Image" OnClick="PickLogo">
+                            @(design.Logo is null ? "Añadir logotipo" : "Cambiar logotipo")
+                        </MudButton>
+                        @if (design.Logo is not null)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.DeleteOutline" OnClick="RemoveLogo">
+                                Quitar
+                            </MudButton>
+                        }
+                    </div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">PNG o JPG, hasta 1 MB.</MudText>
+                </MudPaper>
+
+                <MudPaper Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-2">Colores</MudText>
+                    <MudColorPicker Label="Color de fondo de la hoja" Value="@(new MudColor(design.BackgroundColor))"
+                                    ValueChanged="c => design.BackgroundColor = Hex(c)" ShowAlpha="false"
+                                    Variant="Variant.Outlined" Class="mb-3" />
+                    <MudColorPicker Label="Color de títulos y franjas" Value="@(new MudColor(AccentColor))"
+                                    ValueChanged="c => design.AccentColor = Hex(c)" ShowAlpha="false"
+                                    Variant="Variant.Outlined" />
+                    @if (design.AccentColor is not null)
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Class="mt-1" OnClick="() => design.AccentColor = null">
+                            Usar el color de la aplicación
+                        </MudButton>
+                    }
+                </MudPaper>
+
+                <MudPaper Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-2">Disposición</MudText>
+                    @if (design.HasCustomTemplate)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                            Se está usando la plantilla importada. Quítala abajo para volver a una de estas.
+                        </MudAlert>
+                    }
+                    <MudRadioGroup T="InvoiceLayout" @bind-Value="design.Layout" Disabled="design.HasCustomTemplate">
+                        @foreach (var layout in Enum.GetValues<InvoiceLayout>())
+                        {
+                            <MudRadio Value="layout" Color="Color.Primary">@InvoiceDesign.Name(layout)</MudRadio>
+                        }
+                    </MudRadioGroup>
+                </MudPaper>
+
+                <MudPaper Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-2">Pie de página</MudText>
+                    <MudTextField T="string" @bind-Value="design.FooterText" Lines="3" Immediate="true"
+                                  Placeholder="Por ejemplo: «Pago por transferencia a ES00 0000 0000 0000 0000 0000. Gracias por su visita.»"
+                                  MaxLength="InvoiceDesign.MaxFooterLength" Variant="Variant.Outlined" />
+                </MudPaper>
+
+                <MudPaper Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-1">Plantilla propia (avanzado)</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-3">
+                        Para un diseño totalmente a medida: un archivo HTML con marcadores como <code>{{number}}</code> o
+                        <code>{{customer.name}}</code>. Lo más fácil es descargar la plantilla actual y cambiarla.
+                        Puede usar el logotipo, los colores y el pie de arriba.
+                    </MudText>
+                    @if (design.HasCustomTemplate)
+                    {
+                        <MudChip T="string" Icon="@Icons.Material.Filled.Code" Color="Color.Primary" Variant="Variant.Outlined" Class="ml-0 mb-2">
+                            @(design.CustomTemplateFileName ?? "Plantilla importada")
+                        </MudChip>
+                    }
+                    <div class="d-flex gap-2 flex-wrap">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download" OnClick="DownloadTemplate">
+                            Descargar plantilla actual
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Upload" OnClick="ImportTemplate">
+                            Importar plantilla
+                        </MudButton>
+                        @if (design.HasCustomTemplate)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.DeleteOutline" OnClick="RemoveTemplate">
+                                Quitar plantilla
+                            </MudButton>
+                        }
+                    </div>
+
+                    <MudExpansionPanels Elevation="0" Class="mt-3">
+                        <MudExpansionPanel Text="Marcadores que se pueden usar">
+                            <MudSimpleTable Dense="true">
+                                <tbody>
+                                    @foreach (var (name, description) in InvoiceTemplate.Placeholders)
+                                    {
+                                        <tr>
+                                            <td style="white-space:nowrap"><code>@($"{{{{{name}}}}}")</code></td>
+                                            <td>@description</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                            <MudText Typo="Typo.body2" Class="mt-2">
+                                Un bloque <code>{{#dato}}…{{/dato}}</code> solo sale si el dato no está vacío, y
+                                <code>{{^dato}}…{{/dato}}</code> solo si lo está. Los scripts se quitan. Los nombres en español de
+                                las plantillas antiguas (<code>{{numero}}</code>, <code>{{#lineas}}</code>…) siguen valiendo.
+                            </MudText>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+                </MudPaper>
+            </MudStack>
+        </MudItem>
+
+        <MudItem xs="12" md="7">
+            <MudText Typo="Typo.h6" Class="mb-2">Vista previa (factura de ejemplo)</MudText>
+            <div class="invoice-preview">
+                <InvoiceDocument Invoice="sample" Design="design" />
+            </div>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Inject] private InvoicingUiOptions Options { get; set; } = default!;
+
+    private InvoiceDesign? design;
+    private CustomerInvoice sample = new();
+    private bool saving;
+
+    private string AccentColor => design?.AccentColor ?? Options.DefaultAccentColor;
+    private string? LogoUrl => design?.Logo is null ? null : $"data:{design.LogoContentType};base64,{Convert.ToBase64String(design.Logo)}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            design = await InvoiceDesignService.GetDesignAsync();
+            sample = Sample(await IssuerProvider.GetIssuerAsync());
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido cargar el diseño. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    /// <summary>Factura de ejemplo para la vista previa, con los datos reales del titular.</summary>
+    private static CustomerInvoice Sample(InvoiceIssuer? issuer)
+    {
+        var invoice = new CustomerInvoice
+        {
+            SeriesCode = CustomerInvoiceSeries.SuggestedCode(DateTime.Today.Year),
+            Number = 1,
+            InvoiceDate = DateTime.Today,
+            IssuerName = issuer?.Name ?? "Nombre del emisor",
+            IssuerNif = issuer?.Nif ?? "G00000000",
+            IssuerAddress = issuer?.Address,
+            CustomerName = "Colegio de ejemplo",
+            CustomerNif = "Q0000000J",
+            CustomerAddress = "Calle Mayor 1, 33000 Oviedo",
+            Notes = "Visita del grupo de 3.º de ESO (45 alumnos).",
+            Lines =
+            [
+                new() { Description = "Entrada escolar", Quantity = 45, UnitPrice = 3.31m, TaxRate = TaxRate.TR2100 },
+                new() { Description = "Visita guiada", Quantity = 1, UnitPrice = 30m, TaxRate = null, TaxExemption = TaxExemption.E1 },
+            ],
+        };
+        invoice.CalculateTotals();
+        return invoice;
+    }
+
+    private static string Hex(MudColor color) => color.ToString(MudColorOutputFormats.Hex).ToUpperInvariant();
+
+    private async Task PickLogo()
+    {
+        try
+        {
+            var file = await FilePicker.PickAsync("Logotipo (PNG o JPG)", InvoiceDesign.LogoExtensions);
+            if (file is null || design is null) return;
+            if (file.Size > InvoiceDesign.MaxLogoSize)
+            {
+                Warnings.Add($"El logotipo ocupa demasiado. El máximo es {InvoiceDesign.MaxLogoSize / 1024 / 1024} MB.", Severity.Warning);
+                return;
+            }
+
+            design.Logo = await file.ReadAsync();
+            design.LogoFileName = file.Name;
+            design.LogoContentType = Path.GetExtension(file.Name).ToLowerInvariant() == ".png" ? "image/png" : "image/jpeg";
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido leer la imagen. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    private void RemoveLogo()
+    {
+        if (design is null) return;
+        design.Logo = null;
+        design.LogoFileName = null;
+        design.LogoContentType = null;
+    }
+
+    private async Task ImportTemplate()
+    {
+        try
+        {
+            var file = await FilePicker.PickAsync("Plantilla de factura (HTML)", InvoiceDesign.TemplateExtensions);
+            if (file is null || design is null) return;
+            if (file.Size > InvoiceDesign.MaxTemplateLength * 4L)
+            {
+                Warnings.Add("La plantilla es demasiado grande.", Severity.Warning);
+                return;
+            }
+
+            // UTF-8, que es como se guardan los HTML hoy en día (si lleva BOM, se quita).
+            var text = Encoding.UTF8.GetString(await file.ReadAsync()).TrimStart('﻿');
+            if (text.Length > InvoiceDesign.MaxTemplateLength)
+            {
+                Warnings.Add($"La plantilla es demasiado grande. El máximo son {InvoiceDesign.MaxTemplateLength / 1000} KB.", Severity.Warning);
+                return;
+            }
+
+            design.CustomTemplate = text;
+            design.CustomTemplateFileName = file.Name;
+
+            var unknown = InvoiceTemplate.UnknownPlaceholders(text);
+            if (unknown.Count > 0)
+                Warnings.Add($"La plantilla tiene marcadores que no existen y saldrán en blanco: {string.Join(", ", unknown.Select(u => "{{" + u + "}}"))}. Revisa cómo están escritos.",
+                    Severity.Warning, o => o.RequireInteraction = true);
+            else
+                Warnings.Add("Plantilla importada. Revisa la vista previa y pulsa «Guardar diseño».", Severity.Info);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido leer la plantilla. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    private async Task RemoveTemplate()
+    {
+        if (design is null) return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Quitar plantilla",
+            "¿Volver a una disposición de la aplicación? La plantilla importada se quitará al guardar (puedes descargarla antes).",
+            yesText: "Quitar",
+            cancelText: "Cancelar");
+        if (confirmed != true) return;
+
+        design.CustomTemplate = null;
+        design.CustomTemplateFileName = null;
+    }
+
+    private async Task DownloadTemplate()
+    {
+        if (design is null) return;
+        try
+        {
+            var name = design.CustomTemplateFileName ?? $"plantilla-factura-{design.Layout}.html";
+            if (await FileSaver.SaveAsync(name, Encoding.UTF8.GetBytes(InvoiceTemplate.For(design))))
+                Warnings.Add($"Plantilla guardada: {name}", Severity.Success);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar la plantilla. Inténtalo de nuevo.", Severity.Error);
+        }
+    }
+
+    private async Task Save()
+    {
+        if (design is null) return;
+        saving = true;
+        try
+        {
+            await InvoiceDesignService.SaveDesignAsync(design);
+            Warnings.Add("Diseño de factura guardado.", Severity.Success);
+        }
+        catch (BusinessRuleException ex)
+        {
+            Warnings.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Warnings.Add("No se ha podido guardar el diseño. Inténtalo de nuevo.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}
