@@ -18,5 +18,6 @@ jobs:
           dotnet-version: "10.0.x"
       - run: dotnet build QuickInventory.slnx -c Release
       - run: dotnet test tests/QuickInventory.Core.Tests -c Release --no-build
+      - run: dotnet test tests/Invoicing.Tests -c Release --no-build
       # La prueba real contra la AEAT se omite: no hay variables VERIFACTU_PRUEBAS_*.
       - run: dotnet test tests/QuickInventory.Verifactu.Tests -c Release --no-build

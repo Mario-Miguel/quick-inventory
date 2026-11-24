@@ -2,7 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
-using QuickInventory.UI;
+using Invoicing.UI;
 
 namespace QuickInventory.Desktop;
 

@@ -14,6 +14,6 @@ public interface IConnectionSetup
     /// Prueba la conexión con <paramref name="password"/> y, si funciona, la guarda en este equipo
     /// y vuelve a abrir la aplicación.
     /// </summary>
-    /// <exception cref="QuickInventory.Core.BusinessRuleException">Con un mensaje para el usuario si no se puede conectar.</exception>
+    /// <exception cref="BusinessRuleException">Con un mensaje para el usuario si no se puede conectar.</exception>
     Task SaveAndRestartAsync(string password);
 }

@@ -1,0 +1,63 @@
+/* Estilos de las pantallas de Invoicing. La aplicación los enlaza con
+   <link href="_content/Invoicing.UI/invoicing.css" rel="stylesheet" />.
+   Los títulos de página usan además la clase "page-title", que pone la aplicación (si no, salen como un h1 normal). */
+
+/* Nombres y números destacados en las tablas. */
+.invoicing-strong {
+  font-weight: 600;
+}
+
+/* Factura a cliente (InvoiceDocument): una hoja A4. El aspecto lo pone la plantilla del diseño. */
+.invoice-document {
+  width: 210mm;
+  max-width: 100%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  /* Que se impriman los fondos y colores de la plantilla aunque la impresora "ahorre tinta". */
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Al imprimir solo sale la factura: el resto de la app se oculta y deja de recortar la altura. */
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .invoice-document,
+  .invoice-document * {
+    visibility: visible;
+  }
+
+  html, body, .mud-layout, .mud-main-content {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .invoice-document {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 210mm;
+    max-width: none;
+    box-shadow: none;
+    overflow: visible;
+  }
+}
+
+/* Diseño de factura: la vista previa, a escala para que quepa la hoja entera junto a las opciones. */
+.invoice-preview {
+  zoom: 0.6;
+}
+
+.design-logo {
+  display: block;
+  max-height: 80px;
+  max-width: 100%;
+}

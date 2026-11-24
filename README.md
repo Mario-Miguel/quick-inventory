@@ -70,7 +70,7 @@ con su `client.json`:
 {
   "AppName": "Museo de la Sidra",
   "Colors": { "Primary": "#2F5D2A", "Secondary": "#C8922A", "Background": "#FAF7F2" },
-  "Features": { "Verifactu": true, "PrestaShop": true },
+  "Features": { "Verifactu": true, "PrestaShop": true, "CustomerInvoices": true },
   "Issuer": { "Nif": "G33123456", "LegalName": "Fundación ...", "Address": "..." },
   "Database": { "Port": 5432, "Name": "quickinventory", "Username": "museo_app" }
 }
@@ -79,6 +79,8 @@ con su `client.json`:
 - `AppName`: nombre de la barra superior, del título de la ventana y de los avisos.
 - `Colors`: colores en formato `#RRGGBB`. `Primary` es el de los botones y la barra superior.
 - `Features`: módulos opcionales. Sin `PrestaShop` desaparece «Tienda online» y el «Calendario» no muestra las entradas compradas en la web.
+  Sin `CustomerInvoices` desaparece el apartado «Facturas a clientes» (Facturas a clientes, Clientes, Diseño de factura)
+  y la parte de facturas de «Series de facturas»; sus pantallas tampoco se pueden abrir. Los datos ya guardados no se borran.
   `Verifactu` todavía no cambia nada: la app aún no envía facturas (ver `docs/verifactu.md`).
 - `Issuer` (opcional): datos fiscales del titular. Si están, el asistente de la primera instalación sale ya
   relleno y solo hay que confirmarlos. Si no, se escriben a mano en el asistente.

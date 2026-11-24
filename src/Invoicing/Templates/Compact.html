@@ -1,0 +1,63 @@
+<!--
+  Plantilla de factura: «Compacta».
+  Los marcadores entre llaves dobles se cambian por los datos de cada factura. Lista completa en la pantalla «Diseño de factura» (también valen los nombres antiguos en español).
+  Los estilos van dentro de .invoice para no cambiar el resto de la aplicación.
+-->
+<style>
+  .invoice { background: {{color.background}}; color: #000; min-height: 296mm; box-sizing: border-box; padding: 12mm;
+             display: flex; flex-direction: column; font-family: "Segoe UI", Arial, sans-serif; font-size: 12px; line-height: 1.35; }
+  .invoice .cabecera { display: flex; justify-content: space-between; align-items: center; gap: 16px;
+                       border-bottom: 2px solid {{color.accent}}; padding-bottom: 8px; margin-bottom: 14px; }
+  .invoice .logo { max-height: 48px; max-width: 160px; }
+  .invoice .emisor { display: flex; align-items: center; gap: 12px; }
+  .invoice .emisor b { font-size: 14px; }
+  .invoice .titulo { text-align: right; }
+  .invoice .titulo b.palabra { color: {{color.accent}}; font-size: 16px; letter-spacing: 1px; }
+  .invoice .cliente { margin-bottom: 14px; }
+  .invoice .etiqueta { color: {{color.accent}}; font-weight: 600; }
+  .invoice table { border-collapse: collapse; }
+  .invoice .lineas { width: 100%; }
+  .invoice .lineas th { text-align: left; border-bottom: 1px solid #000; padding: 3px 6px; }
+  .invoice .lineas td { border-bottom: 1px solid #e5e5e5; padding: 3px 6px; }
+  .invoice .num { text-align: right; white-space: nowrap; }
+  .invoice .totales { margin: 10px 0 0 auto; }
+  .invoice .totales td { padding: 2px 6px; }
+  .invoice .total td { border-top: 1px solid #000; font-size: 14px; font-weight: 700; }
+  .invoice .observaciones { margin-top: 14px; }
+  .invoice .pie { margin-top: auto; padding-top: 10px; font-size: 11px; color: #444; }
+</style>
+<div class="invoice">
+  <div class="cabecera">
+    <div class="emisor">
+      {{#logo}}<img class="logo" src="{{logo}}" alt="">{{/logo}}
+      <div><b>{{issuer.name}}</b> · NIF {{issuer.nif}}{{#issuer.address}}<br>{{issuer.address}}{{/issuer.address}}</div>
+    </div>
+    <div class="titulo"><b class="palabra">FACTURA</b> {{number}}<br>{{date}}</div>
+  </div>
+
+  <div class="cliente">
+    <span class="etiqueta">Cliente:</span> <b>{{customer.name}}</b> · NIF {{customer.nif}} · {{customer.address}}
+  </div>
+
+  <table class="lineas">
+    <thead>
+      <tr><th>Concepto</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">IVA</th><th class="num">Importe</th></tr>
+    </thead>
+    <tbody>
+      {{#lines}}
+      <tr><td>{{description}}</td><td class="num">{{quantity}}</td><td class="num">{{price}}</td><td class="num">{{tax_rate}}</td><td class="num">{{amount}}</td></tr>
+      {{/lines}}
+    </tbody>
+  </table>
+
+  <table class="totales">
+    {{#taxes}}
+    <tr><td>Base {{rate}}</td><td class="num">{{base}}</td>{{^exempt}}<td>IVA</td><td class="num">{{tax_amount}}</td>{{/exempt}}</tr>
+    {{/taxes}}
+    <tr class="total"><td>Total</td><td class="num" colspan="3">{{total}}</td></tr>
+  </table>
+
+  {{#notes}}<div class="observaciones"><span class="etiqueta">Observaciones:</span> {{notes}}</div>{{/notes}}
+
+  {{#footer}}<div class="pie">{{footer}}</div>{{/footer}}
+</div>

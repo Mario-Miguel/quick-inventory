@@ -14,6 +14,7 @@ public class ClientSettingsTests
 
         Assert.False(settings.Features.IsEnabled(ClientFeature.Verifactu));
         Assert.False(settings.Features.IsEnabled(ClientFeature.PrestaShop));
+        Assert.False(settings.Features.IsEnabled(ClientFeature.CustomerInvoices));
     }
 
     [Theory]

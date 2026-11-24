@@ -1,4 +1,3 @@
-using QuickInventory.Core;
 
 namespace QuickInventory.Data;
 

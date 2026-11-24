@@ -1,5 +1,6 @@
 @page "/invoice-series"
 @inject IInvoiceSeriesService InvoiceSeriesService
+@inject ClientSettings Client
 @inject IDialogService Dialogs
 @inject ISnackbar Warnings
 
@@ -13,9 +14,21 @@
 </div>
 
 <MudText Class="mb-4">
-    Cada ticket y cada factura llevan un número que no se puede repetir ni saltar. Hace falta una serie por año
-    para los tickets, que comparten Taquilla y Tienda, y otra para las facturas a clientes. Una serie solo se
-    puede cambiar mientras no se haya emitido nada con ella.
+    @if (Client.Features.CustomerInvoices)
+    {
+        <text>
+            Cada ticket y cada factura llevan un número que no se puede repetir ni saltar. Hace falta una serie por año
+            para los tickets, que comparten Taquilla y Tienda, y otra para las facturas a clientes. Una serie solo se
+            puede cambiar mientras no se haya emitido nada con ella.
+        </text>
+    }
+    else
+    {
+        <text>
+            Cada ticket lleva un número que no se puede repetir ni saltar. Hace falta una serie por año, que comparten
+            Taquilla y Tienda. Una serie solo se puede cambiar mientras no se haya emitido nada con ella.
+        </text>
+    }
 </MudText>
 
 <MudText Typo="Typo.h6" Class="mb-2">Tickets</MudText>
@@ -69,63 +82,15 @@ else
     </MudTable>
 }
 
-<div class="d-flex align-center flex-wrap gap-4 mt-8 mb-2">
-    <MudText Typo="Typo.h6">Facturas a clientes</MudText>
-    <MudSpacer />
-    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" StartIcon="@Icons.Material.Filled.Add"
-               OnClick="NewCustomerInvoiceSeries">
-        Nueva serie de facturas
-    </MudButton>
-</div>
-
-@if (customerSeries is not null)
+@if (Client.Features.CustomerInvoices)
 {
-    @if (CustomerSeriesMissingThisYear)
-    {
-        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
-            Falta la serie de facturas a clientes de @DateTime.Now.Year. Hace falta para emitir facturas a colegios u organizaciones.
-        </MudAlert>
-    }
-
-    <MudTable T="CustomerInvoiceSeriesStatus" Items="customerSeries" Hover="true" Striped="true" Elevation="1" Breakpoint="Breakpoint.Sm">
-        <HeaderContent>
-            <MudTh>Año</MudTh>
-            <MudTh>Código</MudTh>
-            <MudTh Style="text-align:right">Último número</MudTh>
-            <MudTh>Próxima factura</MudTh>
-            <MudTh Style="text-align:right">Acciones</MudTh>
-        </HeaderContent>
-
-        <RowTemplate>
-            <MudTd DataLabel="Año">@context.Series.Year</MudTd>
-            <MudTd DataLabel="Código"><span class="product-name">@context.Series.Code</span></MudTd>
-            <MudTd DataLabel="Último número" Style="text-align:right">@context.Series.LastNumber</MudTd>
-            <MudTd DataLabel="Próxima factura">@context.Series.NextInvoiceId</MudTd>
-            <MudTd Style="text-align:right; white-space:nowrap">
-                @if (context.InUse)
-                {
-                    <MudTooltip Text="Ya tiene facturas emitidas: no se puede cambiar">
-                        <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Default" Class="mx-3" />
-                    </MudTooltip>
-                }
-                else
-                {
-                    <MudTooltip Text="Editar">
-                        <MudIconButton Icon="@Icons.Material.Filled.Edit" OnClick="() => EditCustomerInvoiceSeries(context.Series)" aria-label="Editar" />
-                    </MudTooltip>
-                }
-            </MudTd>
-        </RowTemplate>
-
-        <NoRecordsContent>
-            <MudText Class="pa-4">Todavía no hay ninguna serie de facturas a clientes.</MudText>
-        </NoRecordsContent>
-    </MudTable>
+    <div class="mt-8">
+        <CustomerInvoiceSeriesPanel />
+    </div>
 }
 
 @code {
     private List<InvoiceSeriesStatus>? series;
-    private List<CustomerInvoiceSeriesStatus>? customerSeries;
 
     private static readonly DialogOptions CustomDialogOptions = new()
     {
@@ -134,14 +99,12 @@ else
     };
 
     private bool MissingThisYear => series?.Any(s => s.Series.Year == DateTime.Now.Year) == false;
-    private bool CustomerSeriesMissingThisYear => customerSeries?.Any(s => s.Series.Year == DateTime.Now.Year) == false;
 
     protected override async Task OnInitializedAsync() => await Load();
 
     private async Task Load()
     {
         series = await InvoiceSeriesService.GetSeriesAsync();
-        customerSeries = await InvoiceSeriesService.GetCustomerInvoiceSeriesAsync();
     }
 
     // Propone la de este año si falta; si no, la del siguiente.
@@ -159,36 +122,28 @@ else
     // Se edita una copia: si el usuario cancela, la tabla no cambia.
     private Task Edit(InvoiceSeries s) => OpenEditor(s.Clone(), "Editar serie");
 
-    private Task NewCustomerInvoiceSeries()
-    {
-        var year = CustomerSeriesMissingThisYear ? DateTime.Now.Year : DateTime.Now.Year + 1;
-        var newSeries = new CustomerInvoiceSeries
-        {
-            Year = year,
-            Code = CustomerInvoiceSeries.SuggestedCode(year),
-        };
-        return OpenEditor(newSeries, "Nueva serie de facturas a clientes");
-    }
+    private static readonly NumberingSeriesTexts TicketTexts = new(
+        "La serie es la misma para Taquilla y Tienda.",
+        "Va delante del número en cada ticket. Solo letras sin tilde, números, «-» y «/»",
+        "Número del último ticket emitido",
+        "Si este año ya se han hecho tickets con esta serie (por ejemplo, con otro programa), escribe el número del último. Si no, deja 0",
+        "El próximo ticket será el");
 
-    private Task EditCustomerInvoiceSeries(CustomerInvoiceSeries s) => OpenEditor(s.Clone(), "Editar serie de facturas a clientes");
-
-    private async Task OpenEditor(NumberingSeries editing, string title)
+    private async Task OpenEditor(InvoiceSeries editing, string title)
     {
-        var parameters = new DialogParameters<InvoiceSeriesDialog>
+        var parameters = new DialogParameters<NumberingSeriesDialog>
         {
             { x => x.Series, editing },
-            { x => x.ForCustomerInvoices, editing is CustomerInvoiceSeries },
+            { x => x.SuggestCode, InvoiceSeries.SuggestedCode },
+            { x => x.Texts, TicketTexts },
         };
-        var dialog = await Dialogs.ShowAsync<InvoiceSeriesDialog>(title, parameters, CustomDialogOptions);
+        var dialog = await Dialogs.ShowAsync<NumberingSeriesDialog>(title, parameters, CustomDialogOptions);
         var result = await dialog.Result;
-        if (result is not { Canceled: false, Data: NumberingSeries saved }) return;
+        if (result is not { Canceled: false, Data: InvoiceSeries saved }) return;
 
         try
         {
-            if (saved is CustomerInvoiceSeries customerInvoiceSeries)
-                await InvoiceSeriesService.SaveCustomerInvoiceSeriesAsync(customerInvoiceSeries);
-            else
-                await InvoiceSeriesService.SaveSeriesAsync((InvoiceSeries)saved);
+            await InvoiceSeriesService.SaveSeriesAsync(saved);
             Warnings.Add($"Serie {saved.Code} guardada.", Severity.Success);
         }
         catch (BusinessRuleException ex)

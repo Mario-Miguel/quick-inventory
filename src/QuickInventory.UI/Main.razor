@@ -1,5 +1,6 @@
 @* Componente raíz: lo cargan tanto la app de escritorio como (en el futuro) la web. *@
-<Router AppAssembly="typeof(Main).Assembly">
+@* Las pantallas de facturas a clientes vienen de la librería Invoicing.UI. *@
+<Router AppAssembly="typeof(Main).Assembly" AdditionalAssemblies="[typeof(InvoicingUi).Assembly]">
     <Found Context="routeData">
         <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
         <FocusOnNavigate RouteData="routeData" Selector="h1" />

@@ -8,6 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="Invoicing" />
+    <Using Include="Invoicing.Models" />
+    <Using Include="Invoicing.UI" />
+  </ItemGroup>
+
+  <ItemGroup>
     <SupportedPlatform Include="browser" />
   </ItemGroup>
 
@@ -19,6 +25,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\QuickInventory.Core\QuickInventory.Core.csproj" />
+    <!-- Pantallas de facturas a clientes (y IFilePicker/IFileSaver/IPagePrinter, que se usan en toda la app). -->
+    <ProjectReference Include="..\Invoicing.UI\Invoicing.UI.csproj" />
   </ItemGroup>
 
 </Project>

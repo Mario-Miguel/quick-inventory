@@ -1,4 +1,3 @@
-using QuickInventory.Core;
 using QuickInventory.Core.Models;
 
 namespace QuickInventory.UI;

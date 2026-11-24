@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using QuickInventory.Core;
 using QuickInventory.Core.Models;
 using QuickInventory.Core.Services;
 
